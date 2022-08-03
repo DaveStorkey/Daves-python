@@ -14,7 +14,7 @@ import numpy as np
 import re
 
 def drown_field(file_in=None, file_out=None, varnames=None, 
-                niter=None, min_points=None, new_mask_file=None, new_mask_name=None):
+                niter=None, min_points=None):
 
     if niter is None:
         niter = 10
@@ -50,13 +50,6 @@ def drown_field(file_in=None, file_out=None, varnames=None,
         for varname in varnames:
             fields.append(getattr(indata,varname))
 
-    new_mask = None
-    if new_mask_file is not None:
-        if new_mask_name is None:
-            new_mask_name="tmask"
-        with xr.open_dataset(new_mask_file) as new_mask_in:
-            new_mask = getattr(new_mask_in,new_mask_name)
-
     # do horizontal averaging of neighbouring non-NaN points
     for field in fields:
         drowned_field = field
@@ -83,14 +76,6 @@ def drown_field(file_in=None, file_out=None, varnames=None,
             drowned_field.values = xr.where( np.isnan(drowned_field.values) & (weights > min_points-1),
                         ( field_n  + field_s  + field_e  + field_w +
                           field_nw + field_ne + field_sw + field_se ) / weights, drowned_field)
-
-    if new_mask is not None:
-        n_fail = np.count_nonzero( (np.isnan(drowned_field[0].values) & new_mask == 1) )
-        if n_fail > 0:
-            print(n_fail," NaN points at sea point in new mask.")
-            print(np.where( (np.isnan(drowned_field[0].values) & new_mask == 1) ))
-        else:
-            print("No more NaNs at sea points in new mask.")
 
     if field.name == fields[0].name:
         outdata = drowned_field.to_dataset()    
@@ -121,14 +106,9 @@ if __name__=="__main__":
                          help="number of iterations - default 10")
     parser.add_argument("-m", "--min_points", action="store",dest="min_points",type=int,
                          help="minimum number of nonland neighbours for filling to occur - default 1")
-    parser.add_argument("-K", "--new_mask_file", action="store",dest="new_mask_file",
-                         help="name of file with new mask to check drowned field against")
-    parser.add_argument("-k", "--new_mask_name", action="store",dest="new_mask_name",
-                         help="new mask field to check drowned field against")
 
     args = parser.parse_args()
 
     drown_field(file_in=args.file_in,file_out=args.file_out,varnames=args.varnames,
-                niter=args.niter,min_points=args.min_points, new_mask_file=args.new_mask_file,
-                new_mask_name=args.new_mask_name )
+                niter=args.niter,min_points=args.min_points )
 
