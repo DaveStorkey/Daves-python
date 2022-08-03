@@ -13,7 +13,7 @@ import xarray as xr
 import numpy as np
 import re
 
-def drown_field(file_in=None, file_out=None, varnames=None, vert_fill=None,
+def drown_field(file_in=None, file_out=None, varnames=None, 
                 niter=None, min_points=None, new_mask_file=None, new_mask_name=None):
 
     if niter is None:
@@ -57,44 +57,32 @@ def drown_field(file_in=None, file_out=None, varnames=None, vert_fill=None,
         with xr.open_dataset(new_mask_file) as new_mask_in:
             new_mask = getattr(new_mask_in,new_mask_name)
 
-    if vert_fill:
-        # just fill in from points immediately above
-        for field in fields:
-            drowned_field = field
-            nn = 0
-            while nn < niter:
-                nn += 1
-                field_zeros = xr.where( np.isnan(drowned_field), 0.0, drowned_field)
-                field_up = np.roll(field_zeros.values,shift=-1,axis=-3)
-                drowned_field.values = xr.where( np.isnan(drowned_field.values),
-                                           field_up, drowned_field )
-    else:
-        # do horizontal averaging of neighbouring non-NaN points
-        for field in fields:
-            drowned_field = field
-            nn = 0
-            while nn < niter:
-                nn += 1
-                field_zeros = xr.where( np.isnan(drowned_field), 0.0, drowned_field)
-                field_n = np.roll(field_zeros.values,shift=-1,axis=-2)
-                field_s = np.roll(field_zeros.values,shift=+1,axis=-2)
-                field_e = np.roll(field_zeros.values,shift=-1,axis=-1)
-                field_w = np.roll(field_zeros.values,shift=+1,axis=-1)
-                field_ne = np.roll(field_zeros.values,shift=(-1,-1),axis=(-2,-1))
-                field_nw = np.roll(field_zeros.values,shift=(-1,+1),axis=(-2,-1))
-                field_se = np.roll(field_zeros.values,shift=(+1,-1),axis=(-2,-1))
-                field_sw = np.roll(field_zeros.values,shift=(+1,+1),axis=(-2,-1))
-                weights = np.sign(field_n)*np.sign(field_n) + \
-                          np.sign(field_s)*np.sign(field_s) + \
-                          np.sign(field_e)*np.sign(field_e) + \
-                          np.sign(field_w)*np.sign(field_w) + \
-                          np.sign(field_ne)*np.sign(field_ne) + \
-                          np.sign(field_nw)*np.sign(field_nw) + \
-                          np.sign(field_se)*np.sign(field_se) + \
-                          np.sign(field_sw)*np.sign(field_sw) 
-                drowned_field.values = xr.where( np.isnan(drowned_field.values) & (weights > min_points-1),
-                            ( field_n  + field_s  + field_e  + field_w +
-                              field_nw + field_ne + field_sw + field_se ) / weights, drowned_field)
+    # do horizontal averaging of neighbouring non-NaN points
+    for field in fields:
+        drowned_field = field
+        nn = 0
+        while nn < niter:
+            nn += 1
+            field_zeros = xr.where( np.isnan(drowned_field), 0.0, drowned_field)
+            field_n = np.roll(field_zeros.values,shift=-1,axis=-2)
+            field_s = np.roll(field_zeros.values,shift=+1,axis=-2)
+            field_e = np.roll(field_zeros.values,shift=-1,axis=-1)
+            field_w = np.roll(field_zeros.values,shift=+1,axis=-1)
+            field_ne = np.roll(field_zeros.values,shift=(-1,-1),axis=(-2,-1))
+            field_nw = np.roll(field_zeros.values,shift=(-1,+1),axis=(-2,-1))
+            field_se = np.roll(field_zeros.values,shift=(+1,-1),axis=(-2,-1))
+            field_sw = np.roll(field_zeros.values,shift=(+1,+1),axis=(-2,-1))
+            weights = np.sign(field_n)*np.sign(field_n) + \
+                      np.sign(field_s)*np.sign(field_s) + \
+                      np.sign(field_e)*np.sign(field_e) + \
+                      np.sign(field_w)*np.sign(field_w) + \
+                      np.sign(field_ne)*np.sign(field_ne) + \
+                      np.sign(field_nw)*np.sign(field_nw) + \
+                      np.sign(field_se)*np.sign(field_se) + \
+                      np.sign(field_sw)*np.sign(field_sw) 
+            drowned_field.values = xr.where( np.isnan(drowned_field.values) & (weights > min_points-1),
+                        ( field_n  + field_s  + field_e  + field_w +
+                          field_nw + field_ne + field_sw + field_se ) / weights, drowned_field)
 
     if new_mask is not None:
         n_fail = np.count_nonzero( (np.isnan(drowned_field[0].values) & new_mask == 1) )
@@ -129,8 +117,6 @@ if __name__=="__main__":
                          help="output file")
     parser.add_argument("-v", "--varnames", action="store",dest="varnames",nargs="+",
                          help="name of field(s) to drown")
-    parser.add_argument("-V", "--vert_fill", action="store_true",dest="vert_fill",
-                         help="do vertical filling instead of horizontal filling")
     parser.add_argument("-n", "--niter", action="store",dest="niter",type=int,
                          help="number of iterations - default 10")
     parser.add_argument("-m", "--min_points", action="store",dest="min_points",type=int,
@@ -142,7 +128,7 @@ if __name__=="__main__":
 
     args = parser.parse_args()
 
-    drown_field(file_in=args.file_in,file_out=args.file_out,varnames=args.varnames,vert_fill=args.vert_fill,
+    drown_field(file_in=args.file_in,file_out=args.file_out,varnames=args.varnames,
                 niter=args.niter,min_points=args.min_points, new_mask_file=args.new_mask_file,
                 new_mask_name=args.new_mask_name )
 
