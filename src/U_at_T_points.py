@@ -13,7 +13,9 @@ import general_tools as gt
 
 def rotate(ucube,vcube):
 
-    if ucube.shape[-1] == 1442 and ucube.shape[-2] == 1207:
+    if ucube.shape[-1] == 362 and ucube.shape[-2] == 332:
+        model='eORCA1'
+    elif ucube.shape[-1] == 1442 and ucube.shape[-2] == 1207:
         model='eORCA025'
     elif ucube.shape[-1] == 4322 and ucube.shape[-2] == 3606:
         model='eORCA12'
