@@ -794,7 +794,7 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
             csline = plt.contour(xpoints,depth.points,fld_xsec_filled, colors="black", levels=levs_i,linewidths=0.5)
             if fmt is None:
                 fmt='%1.1f'
-            plt.clabel(csline,inline=True,manual=False,fontsize=7,fmt=fmt)
+            plt.clabel(csline,inline=True,manual=False,fontsize=fontsizes[3],fmt=fmt)
         else:
             raise Exception("Error: unknown plot_type: "+plot_type)
 
@@ -827,9 +827,9 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
                     for label in cax.ax.xaxis.get_ticklabels()[::2]:
                         label.set_visible(False)           
             if units is not None:
-                cax.ax.set_xlabel(str(units),fontsize='x-large')
+                cax.ax.set_xlabel(str(units),fontsize=fontsizes[1])
             elif str(fld.units) != "1" and str(fld.units) != "unknown":
-                cax.ax.set_xlabel(str(fld.units),fontsize='x-large')
+                cax.ax.set_xlabel(str(fld.units),fontsize=fontsizes[1])
     
     # Line segments
 
@@ -943,7 +943,7 @@ if __name__=="__main__":
                     help="maximum depth for plot")
     parser.add_argument("-t", "--title", action="store",dest="title",
                     help="title for plot")
-    parser.add_argument("-A", "--fontsizes", action="store",dest="fontsizes",nargs='+',
+    parser.add_argument("-Y", "--fontsizes", action="store",dest="fontsizes",nargs='+',
                     help="fontsizes for : plot title, axis labels, axis tick labels, contour labels. Use None for default.")
     parser.add_argument("-M", "--method", action="store",dest="method",
                     help="method for extracting section ('dave' or 'pat' or 'gridline')")

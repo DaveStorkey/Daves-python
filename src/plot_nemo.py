@@ -163,7 +163,8 @@ def guess_bounds(x,y):
 def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,mxfld=None,title=None,rec=0,level=1,bottom=False,
               scientific=False,cmap=None,colors=None,reverse_colors=False,glob=None,west=None,east=None,south=None,north=None,
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
-              whitebg=False,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,nocoast=None):
+              whitebg=False,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,nocoast=None,
+              draw_points=None,draw_fmt=None,fontsizes=None):
 
     # short cuts
     projections = { 'none'          : ( None               , 'global' ),
@@ -172,6 +173,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                     'merc'          : ( ccrs.Mercator(min_latitude=-86.0), 'global' ), 
                     'northps'       : ( ccrs.NorthPolarStereo(), [0,359.9,50,90] ), 
 #                    'northps'       : ( ccrs.NorthPolarStereo(), [0,359.9,60,90] ), 
+                    'southps_large' : ( ccrs.SouthPolarStereo(), [0,359.9,-90,-35] ), 
                     'southps'       : ( ccrs.SouthPolarStereo(), [0,359.9,-90,-45] ), 
                     'southps_zoom'  : ( ccrs.SouthPolarStereo(), [0,359.9,-90,-60] ),
                     'south_stereo'  : ( ccrs.Stereographic(central_latitude=-90.0, central_longitude=0.0),[0,359,-90,-60] )
@@ -235,6 +237,12 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     print('number of vector fields to plot : ',nvector)
     print('len(fld_in) :', len(fld_in))
     print('regrid_vector is : ',regrid_vector)
+
+    fontsizes_list = [14,12,10]
+    for count,fontsize in enumerate(fontsizes):
+        if fontsize is not None:
+            fontsizes_list[count]=fontsize
+    fontsizes = fontsizes_list
 
 # Organise control parameters that apply to individual fields.
 # In general with multiple fields and a single value of the control
@@ -683,7 +691,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             # Axis formatting - ONLY WORKS FOR PLATECARREE (or no projection)!!
             gl = plt.gca().gridlines(crs=p[0], draw_labels=True)
             gl.xlines = gl.ylines = gl.xlabels_top = gl.ylabels_right = False
-            gl.xlabel_style = gl.ylabel_style = {'size':9, 'color':'gray'}
+            gl.xlabel_style = gl.ylabel_style = {'size':fontsizes[2], 'color':'gray'}
             gl.xformatter = LONGITUDE_FORMATTER
             gl.yformatter = LATITUDE_FORMATTER
 
@@ -739,14 +747,14 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                 else:
                     labels=["%1.2f" %lev for lev in levs_ticks]
                 if vertbar:
-                    cax.ax.set_yticklabels(labels)
+                    cax.ax.set_yticklabels(labels,fontsize=fontsizes[2])
                 else:
-                    cax.ax.set_xticklabels(labels,rotation=45)
+                    cax.ax.set_xticklabels(labels,fontsize=fontsizes[2],rotation=45)
                 if units is not None:
                     # units keyword overrides units read in from file
-                    cax.ax.set_xlabel(units)
+                    cax.ax.set_xlabel(units,fontsize=fontsizes[1])
                 elif str(fld_in_i.units) != "1":
-                    cax.ax.set_xlabel(str(fld_in_i.units))
+                    cax.ax.set_xlabel(str(fld_in_i.units),fontsize=fontsizes[1])
 
     # Arrows for vector fields
 
@@ -766,21 +774,43 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                 arrow_colour=arrows[2]
             if len(arrows) > 3:
                 key_arrow_length=arrows[3]
+        print("Plotting arrows")
         csarrows = plt.quiver(x[v1][::arrow_subsample], y[v1][::arrow_subsample], 
-                        fldproj[v1].data[::arrow_subsample,::arrow_subsample], fldproj[v2].data[::arrow_subsample,::arrow_subsample], 
-                        color=arrow_colour, scale=arrow_scale, scale_units='inches', angles='xy' )
+                   fldproj[v1].data[::arrow_subsample,::arrow_subsample], fldproj[v2].data[::arrow_subsample,::arrow_subsample], 
+                   color=arrow_colour, scale=arrow_scale, scale_units='inches', angles='xy' )
         if scientific:
             arrow_label = '%1.1e'%key_arrow_length+str(fld_in[v1].units)
         else:        
             arrow_label = '%1.1f'%key_arrow_length+str(fld_in[v1].units)
         plt.quiverkey(csarrows, X=0.8, Y=-0.05, U=key_arrow_length, label=arrow_label, labelpos='E')
 
+    # Line segments
+
+    if draw_points is not None:
+        if len(draw_points)%4 != 0:
+            raise Exception("Error: number of draw_points (-d) must be a multiple of 4: start_x,start_depth,end_x,end_depth")
+        fmt = "k-"  # default to black solid lines        
+        linewidth = 2
+        if draw_fmt is not None:
+            fmt = draw_fmt[0]
+            if len(draw_fmt) == 2:
+                linewidth = draw_fmt[1] 
+        for ii in range(0,len(draw_points),4):
+            # pyplot.plot takes all the x-values first and the y-values second...
+            plot_x = [draw_points[ii],draw_points[ii+2]]
+            plot_y = [draw_points[ii+1],draw_points[ii+3]]
+            print("Plotting : ",plot_x,plot_y," on projection ",p[0])
+            plt.gca().plot(plot_x[:],plot_y[:],fmt,linewidth=linewidth,transform=p[0])
+            
+
     # Plot title
 
     if title is not None:
         title=textwrap.fill(title,70)
-        plt.gcf().suptitle(title, fontsize=12, y=0.95)    
-#        plt.gcf().text(x=0.5, y=0.92, text=title, fontsize=16 )    
+        if subplot is not None:
+            plt.gca().set_title(title, fontsize=fontsizes[0])    
+        else:
+            plt.gcf().suptitle(title, fontsize=fontsizes[0], y=0.95)    
 
     if outfile is not None:
         matplotlib.rcParams['font.size'] =8
@@ -822,6 +852,8 @@ if __name__=="__main__":
                     help="maximum field value(s) to plot for colour filled contouring - specify None for default")
     parser.add_argument("-t", "--title", action="store",dest="title",default=None,
                     help="title for plot")
+    parser.add_argument("-Y", "--fontsizes", action="store",dest="fontsizes",nargs='+',
+                    help="fontsizes for : plot title, axis labels, axis tick labels. Use None for default.")
     parser.add_argument("-G", "--global", action="store_true",dest="glob",default=False,
                     help="force global limits on plot even if data is limited area")
     parser.add_argument("-W", "--west", action="store",dest="west",type=float,default=None,
@@ -868,6 +900,10 @@ if __name__=="__main__":
                     help="x-dimension of figure (in inches I think)")
     parser.add_argument("--figy", action="store",dest="figy",default=None,
                     help="y-dimension of figure (in inches I think)")
+    parser.add_argument("--draw_points", action="store",dest="draw_points",nargs="+",
+                    help="list of points to draw line segments between in groups of four: start_lon,start_lat,end_lon,end_lat")
+    parser.add_argument("--draw_fmt", action="store",dest="draw_fmt",nargs="+",
+                    help="first argument is format for line segments as for fmt keyword for pyplot.plot; second optional argument is line thickness")
 
     args = parser.parse_args()
 
@@ -877,6 +913,6 @@ if __name__=="__main__":
               maskfile=args.maskfile,outfile=args.outfile,bottom=args.bottom,scientific=args.scientific,
               reverse_colors=args.reverse_colors,logscale=args.logscale,factor=args.factor,zeromean=args.zeromean,
               plot_types=args.plot_types,arrows=args.arrows,whitebg=args.whitebg,vertbar=args.vertbar,
-              colors=args.colors,cmap=args.cmap,noshow=args.noshow,units=args.units,nobar=args.nobar,
-              figx=args.figx,figy=args.figy,nocoast=args.nocoast)        
+              colors=args.colors,cmap=args.cmap,noshow=args.noshow,units=args.units,nobar=args.nobar,fontsizes=args.fontsizes,
+              figx=args.figx,figy=args.figy,nocoast=args.nocoast,draw_points=args.draw_points,draw_fmt=args.draw_fmt)        
     
