@@ -44,6 +44,9 @@ Nov 2021 : "units" and "vertbar" options copied from plot_nemo.py. DS.
 
 Nov 2021 : Fix for case where no masked values on a section. DS
 
+Aug 2022 : Add subplot, figx, figy options and return the plot objects so can be called from a 
+           wrapper routine to do multi-plots. DS.
+
 To do : Currently we don't take account of partial cells at the bottom. In principle could do this by reading in the
         3D e3t field, but I think getting the masking to work properly could be quite tricky.  
 
@@ -59,7 +62,6 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as col
 import matplotlib.cm as cm
 import iris
-#import monty
 import numpy as np
 import numpy.ma as ma
 import general_tools as gt
@@ -398,15 +400,17 @@ def get_section(lons,lats,lons_bounds=None,lats_bounds=None,toldeg=None,method=N
 
     return xsec_indices,xpoints,xpoints_name,xpoints_bounds
 
+########################################## Main routine ################################################
+
 def plot_nemo_section(filenames=None,var_names=None,title=None,
                  xsec_indices=None,xpoints=None,xpoints_bounds=None,xpoints_name=None,
                  lat=None,lon=None,index_i=None,index_j=None,levs=None,nlevs=15,
                  rec=None,mnfld=None,mxfld=None,xmin=None,xmax=None,depthmax=None,method=None,logscale=None, 
                  reverseX=None,kilometres=None,outfile=None,toldeg=None,
-                 noshow=None,nobar=None,scientific=None,
-                 plot_types=None,colors=None,cmap=None,factor=None,fmt=None,
+                 noshow=None,nobar=None,scientific=None,figx=None,figy=None,subplot=None,
+                 plot_types=None,colors=None,cmap=None,factor=None,fmt=None,fontsizes=None,
                  maskzero=None,draw_points=None,draw_fmt=None,text=None,textsize=None,
-                      xtrac=None,label_lon=None,label_lat=None,fill_south=None,units=None,vertbar=None):
+                 xtrac=None,label_lon=None,label_lat=None,fill_south=None,units=None,vertbar=None):
 
     print('>>> rec is : ',rec)
     print('>>> method is : ',method)
@@ -492,6 +496,15 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
     if xtrac and label_lon and label_lat:
         raise Exception("Error: should only specify one (or neither) of label_lon and label_lat")
 
+    fontsizes_list = [14,12,10,8]
+    for count,fontsize in enumerate(fontsizes):
+        if fontsize is not None:
+            fontsizes_list[count]=fontsize
+    fontsizes = fontsizes_list
+
+    csline=None
+    cscolor=None
+
 #############################
 # 2. Read in field(s)
 #############################
@@ -518,10 +531,6 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
     if xtrac:
         # in this case we have already read in the section directly from the input file
         for fld,filename in zip(fld_list,filenames):
-            print(fld)
-            # xtrac fields always have a masked point at the end - don't read this. 
-            fld_xsec_list.append(fld.data[:,0,:-1])
-            print('fld_xsec_list[-1].shape',fld_xsec_list[-1].shape)
             if label_lon:
                 xpoints_cube = gt.read_cube(filename,'longitude')
                 xpoints = xpoints_cube.data[0,:-1]
@@ -537,12 +546,33 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
                 e1v = e1v_cube.data[0,0,:-1]
                 xpoints = np.cumsum(e1v,axis=-1) * 0.001
                 xpoints_name='distance along section (km)'
-            print('xpoints : ',xpoints)
-            xpoints_list.append(xpoints)
+            #print('xpoints : ',xpoints)
+
+            # xtrac fields always have a masked point at the end - don't read this. 
+            flddata = fld.data[:,:,:-1].squeeze()
+            # truncate data if xmin and/or xmax set
+            if xmin is not None:
+                indices = np.where(xpoints >= xmin)[0]
+                xpoints = xpoints[indices]
+                flddata = flddata[:,indices]
+            if xmax is not None:
+                indices = np.where(xpoints <= xmax)[0]
+                xpoints = xpoints[indices]
+                flddata = flddata[:,indices]
+
             # no "bounds" variables in xtrac files, so just use get_xpoints_bounds:
             xpoints_bounds = get_xpoints_bounds(xpoints)
-            xpoints_bounds_list.append(xpoints_bounds)
 
+            # if xpoints is distance in km, rescale to start at zero at start of section
+            if not label_lon and not label_lat:
+                xpoints[:] = xpoints[:] - xpoints_bounds[0]
+                xpoints_bounds[:] = xpoints_bounds[:] - xpoints_bounds[0]
+
+            xpoints_list.append(xpoints)
+            xpoints_bounds_list.append(xpoints_bounds)
+            fld_xsec_list.append(flddata)
+            print('fld_xsec_list[-1].shape',fld_xsec_list[-1].shape)
+    
     else:
         # if the input files have 3D fields then extract the required section
         if toldeg is None:
@@ -618,31 +648,20 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
 
     # sort out colour map for filled or line contouring
     if cmap is not None:
-#        if cmap == 'Rainbow':
-#            # shortcut for old IDL rainbow colour map:
-#            cmap = monty.clr_cmap('/home/h04/frsy/IDL/rainbow_diff_nice.clr')
-#        elif '/' in cmap:
-#            # this is pointing to a file so use monty.clr_cmap:                
-#            print('reading colour map using monty.clr_cmap')
-#            cmap = monty.clr_cmap(cmap)
-#        else:
         # assume that it refers to a matplotlib inbuilt colour map:
         print('reading inbuilt matplotlib colour map : ',cmap)
         cmap = getattr(matplotlib.cm,cmap)
-#        if reverse_colors:
-#            cmap = mcolors.ListedColormap(cmap(np.arange(255,-1,-1)))
 
     if colors is None and cmap is None:
         cmap = getattr(matplotlib.cm,'RdYlBu_r')
-#        cmap = monty.clr_cmap('/home/h04/frsy/IDL/rainbow_diff_nice.clr')
 
     # loop over fields to plot (2 max)
     count = 0
     for var_name,plot_type,xpoints,xpoints_bounds,fld,fld_xsec,fac,mnfld_i,mxfld_i,nlevs_i in \
        zip(var_names,plot_types[:nvar],xpoints_list,xpoints_bounds_list,fld_list,fld_xsec_list,factor,mnfld,mxfld,nlevs):
 
-        print("xpoints : ",xpoints)
-        print("xpoints_bounds : ",xpoints_bounds)
+        #print("xpoints : ",xpoints)
+        #print("xpoints_bounds : ",xpoints_bounds)
 
         count += 1
 
@@ -650,10 +669,14 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
             print('multiplying field ',var_name,' by ',fac)
             fld_xsec[:] = fac*fld_xsec[:]
 
-        if mnfld_i is None:
-            mnfld_i = fld_xsec.min()
-        if mxfld_i is None:
+        if mnfld_i is None or mnfld_i == "None":
+             mnfld_i = fld_xsec.min()
+        else:
+             mnfld_i = float(mnfld_i)
+        if mxfld_i is None or mxfld_i == "None":
             mxfld_i = fld_xsec.max()
+        else:
+            mxfld_i = float(mxfld_i)
 
         print('mnfld_i, mxfld_i : ',mnfld_i,mxfld_i)
 
@@ -690,12 +713,34 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
                 break
         else:
             raise Exception("Error: could not find depth coordinate.")
-  
+
         try:
             depth_bounds = np.concatenate((depth.bounds[:,0],np.array([depth.bounds[-1,1]])))
         except(TypeError):
             depth_bounds = get_depth_bounds(depth.points)
         print('depth_bounds : ',depth_bounds)
+
+        if figx is None:
+            figx = matplotlib.rcParams["figure.figsize"][0]
+        if figy is None:
+            figy = matplotlib.rcParams["figure.figsize"][1]
+        print('figx,figy : ',figx,figy)
+
+        # If figure 1 already exists then plt.figure will 
+        # just return a reference to it.
+        fig = plt.figure(1, figsize=[figx,figy])
+
+        # Create plot axes:
+
+        if subplot is not None:
+            if len(subplot) == 1:
+                ax = fig.add_subplot(subplot)
+            elif len(subplot) == 3:
+                ax = fig.add_subplot(subplot[0],subplot[1],subplot[2])
+            else:
+                raise Exception("Error : len(subplot) must be 1 or 3.")
+        else:
+            ax = plt.gca()
 
         if count == 1: 
             # Plot the mask - only for the first field or we overwrite previously-plotted fields!
@@ -710,7 +755,7 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
                 pass
             else:
                 cmap_mask = matplotlib.colors.ListedColormap(cm.binary(np.arange(128)))
-                clev_mask = plt.pcolormesh(xpoints_bounds, depth_bounds, mask_to_plot, cmap=cmap_mask)
+                cscolor_mask = plt.pcolormesh(xpoints_bounds, depth_bounds, mask_to_plot, cmap=cmap_mask)
  
 
         if plot_type == 'l':
@@ -718,61 +763,73 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
             fld_xsec_filled = fill_field(fld_xsec)
             print("Plotting line contours.")
             if colors is not None and cmap is not None:
-                llev = plt.contour(xpoints,depth.points,fld_xsec_filled, colors=colors, levels=levs_i,linewidths=0.5)
+                csline = plt.contour(xpoints,depth.points,fld_xsec_filled, colors=colors, levels=levs_i,linewidths=0.5)
             else:
-                llev = plt.contour(xpoints,depth.points,fld_xsec_filled, colors=colors, cmap=cmap, levels=levs_i,linewidths=0.5)
+                csline = plt.contour(xpoints,depth.points,fld_xsec_filled, colors=colors, cmap=cmap, 
+                                     levels=levs_i,linewidths=0.5)
 #            manual_locations=[(35,1000)]
             if fmt is None:
                 fmt='%1.1f'
-            plt.clabel(llev,inline=True,manual=False,fontsize=7,fmt=fmt)
+            plt.clabel(csline,csline.levels[::2],inline=True,manual=False,fontsize=fontsizes[3],fmt=fmt)
         elif plot_type == 'c':
             ### colour-filled contours ###
             print("Plotting colour-filled contours.")
             fld_xsec_filled = fill_field(fld_xsec)
-            clev=plt.contourf(xpoints,depth.points,fld_xsec,cmap=cmap,levels=levs_i)
+            cscolor = plt.contourf(xpoints,depth.points,fld_xsec,cmap=cmap,levels=levs_i)
         elif plot_type == 'b':
             ### colour-filled blocks ###
             if colors is not None and nvar == 1:
                 (cmap_block,norm_block) = matplotlib.colors.from_levels_and_colors(levs_i,colors)
             else:
                 cmap_block = cmap
-            clev = plt.pcolormesh(xpoints_bounds, depth_bounds, fld_xsec, cmap=cmap_block, vmin=mnfld_i, vmax=mxfld_i)
+            cscolor = plt.pcolormesh(xpoints_bounds, depth_bounds, fld_xsec, cmap=cmap_block, vmin=mnfld_i, vmax=mxfld_i)
         elif plot_type == 'bl':
             ### block plot and lines for the same field ###
             if colors is not None and nvar == 1:
                 (cmap_block,norm_block) = matplotlib.colors.from_levels_and_colors(levs_i,colors)
             else:
                 cmap_block = cmap
-            clev = plt.pcolormesh(xpoints_bounds, depth_bounds, fld_xsec, cmap=cmap_block, vmin=mnfld_i, vmax=mxfld_i)
+            cscolor = plt.pcolormesh(xpoints_bounds, depth_bounds, fld_xsec, cmap=cmap_block, vmin=mnfld_i, vmax=mxfld_i)
             fld_xsec_filled = fill_field(fld_xsec)
-            llev = plt.contour(xpoints,depth.points,fld_xsec_filled, colors="black", levels=levs_i,linewidths=0.5)
+            csline = plt.contour(xpoints,depth.points,fld_xsec_filled, colors="black", levels=levs_i,linewidths=0.5)
             if fmt is None:
                 fmt='%1.1f'
-            plt.clabel(llev,inline=True,manual=False,fontsize=7,fmt=fmt)
+            plt.clabel(csline,inline=True,manual=False,fontsize=7,fmt=fmt)
         else:
             raise Exception("Error: unknown plot_type: "+plot_type)
 
         if not nobar and plot_type != 'l':
             if vertbar:
-                cax = plt.colorbar(clev,orientation='vertical')
+                cax = plt.colorbar(cscolor,orientation='vertical')
             else:
-                cax = plt.colorbar(clev,orientation='horizontal')
+                cax = plt.colorbar(cscolor,orientation='horizontal')
             if plot_type == 'b':
 #                print('norm_block(levs) : ',norm_block(levs))
 #                cax.set_ticks(norm_block(levs))
                 print('levs_i : ',levs_i)
                 cax.set_ticks(levs_i)
             else:
+                print('levs_i : ',levs_i)
                 cax.set_ticks(levs_i)
             if scientific:
                 labels=["%1.2e" %lev for lev in levs_i]
             else:
                 labels=["%1.2f" %lev for lev in levs_i]
-            cax.ax.set_xticklabels(labels,rotation=45)
+            if vertbar:
+                cax.ax.set_yticklabels(labels,fontsize=fontsizes[2])
+            else:
+                cax.ax.set_xticklabels(labels,rotation=45,fontsize=fontsizes[2])
+            if len(labels) > 11:
+                if vertbar:
+                    for label in cax.ax.yaxis.get_ticklabels()[::2]:
+                        label.set_visible(False)           
+                else:
+                    for label in cax.ax.xaxis.get_ticklabels()[::2]:
+                        label.set_visible(False)           
             if units is not None:
-                cax.ax.set_xlabel(str(units))
+                cax.ax.set_xlabel(str(units),fontsize='x-large')
             elif str(fld.units) != "1" and str(fld.units) != "unknown":
-                cax.ax.set_xlabel(str(fld.units))
+                cax.ax.set_xlabel(str(fld.units),fontsize='x-large')
     
     # Line segments
 
@@ -792,7 +849,7 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
             plt.plot(plot_x[:],plot_depth[:],fmt,linewidth=linewidth)
 
     if title is not None:
-        plt.gca().set_title(textwrap.fill(title,60))
+        ax.set_title(textwrap.fill(title,60),fontsize=fontsizes[0])
     if text is not None:
         if type(text) is list:
             if len(text)%3 !=0:
@@ -802,29 +859,40 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
         if textsize is None:
             textsize=12
         for ii in range(0,len(text),3):
-            plt.gca().text(text[ii],text[ii+1],text[ii+2],fontsize=textsize)
+            ax.text(text[ii],text[ii+1],text[ii+2],fontsize=textsize)
+#    if xtrac and (xmin is not None):
+#        ax.set_xlim(xmin,ax.get_xlim()[-1])
+#    if xtrac and (xmax is not None):
+#        ax.set_xlim(ax.get_xlim()[0],xmax)
     if reverseX:
-        gca().set_xlim(gca().get_xlim()[::-1])
+        ax.set_xlim(ax.get_xlim()[::-1])
     if depthmax is not None:
-        plt.gca().set_ylim([depthmax,0.0])
+        ax.set_ylim([depthmax,0.0])
     else:
-        plt.gca().invert_yaxis()
+        ax.invert_yaxis()
 
-    plt.gca().set_ylabel('depth (m)')
+    ax.set_ylabel('depth (m)',fontsize=fontsizes[1])
     if kilometres:
         if lon is not None or 'lat' in xpoints_name:
-            plt.gca().set_xlabel('south-north distance (km)')
+            ax.set_xlabel('south-north distance (km)',fontsize=fontsizes[1])
         elif lat is not None or 'lon' in xpoints_name:
-            plt.gca().set_xlabel('west-east distance (km)')
+            ax.set_xlabel('west-east distance (km)',fontsize=fontsizes[1])
     else:
         if xpoints_name is not None:
-            plt.gca().set_xlabel(xpoints_name)
+            ax.set_xlabel(xpoints_name,fontsize=fontsizes[1])
 
+    ax.xaxis.set_tick_params(labelsize=fontsizes[2])
+    ax.yaxis.set_tick_params(labelsize=fontsizes[2])
 
     if outfile is not None:
+        plt.draw()
         plt.savefig(outfile,dpi=200)
     elif not noshow:
         plt.show()
+
+    # Return references to the plots for use in calling python routines. 
+    # In general one or more of these might have None values. 
+    return csline, cscolor
 
 if __name__=="__main__":
     import argparse
@@ -867,14 +935,16 @@ if __name__=="__main__":
                     help="end of x-axis (max lat or max lon as applicable)")
     parser.add_argument("-R", "--reverseX", action="store_true",dest="reverseX",
                     help="reverse the x axis")
-    parser.add_argument("-f", "--mnfld", action="store",dest="mnfld",type=float,nargs="+",
+    parser.add_argument("-f", "--mnfld", action="store",dest="mnfld",nargs="+",
                     help="minimum field value to plot for colour filled contouring")
-    parser.add_argument("-F", "--mxfld", action="store",dest="mxfld",type=float,nargs="+",
+    parser.add_argument("-F", "--mxfld", action="store",dest="mxfld",nargs="+",
                     help="maximum field value to plot for colour filled contouring")
     parser.add_argument("-D", "--depthmax", action="store",dest="depthmax",type=float,
                     help="maximum depth for plot")
     parser.add_argument("-t", "--title", action="store",dest="title",
                     help="title for plot")
+    parser.add_argument("-A", "--fontsizes", action="store",dest="fontsizes",nargs='+',
+                    help="fontsizes for : plot title, axis labels, axis tick labels, contour labels. Use None for default.")
     parser.add_argument("-M", "--method", action="store",dest="method",
                     help="method for extracting section ('dave' or 'pat' or 'gridline')")
     parser.add_argument("-G", "--logscale", action="store_true",dest="logscale",
@@ -909,10 +979,14 @@ if __name__=="__main__":
                     help="units (label for colour bar)")
     parser.add_argument("-V", "--vertbar", action="store_true",dest="vertbar",
                     help="use vertical color bar (default horizontal)")
+    parser.add_argument("--figx", action="store",dest="figx",default=None,type=float,
+                    help="x-dimension of figure (in inches I think)")
+    parser.add_argument("--figy", action="store",dest="figy",default=None,type=float,
+                    help="y-dimension of figure (in inches I think)")
 
     args = parser.parse_args()
 
-    plot_nemo_section(filenames=args.filenames,var_names=args.var_names, outfile=args.outfile, title=args.title, 
+    plot_nemo_section(filenames=args.filenames,var_names=args.var_names, outfile=args.outfile, title=args.title, fontsizes=args.fontsizes,
     lat=args.lat, lon=args.lon, index_i=args.index_i, index_j=args.index_j,levs=args.levs, nlevs=args.nlevs, rec=args.rec, 
     xmin=args.xmin, xmax=args.xmax,mnfld=args.mnfld, mxfld=args.mxfld, depthmax=args.depthmax, method=args.method, 
     logscale=args.logscale, reverseX=args.reverseX, kilometres=args.kilometres, toldeg=args.toldeg, 
@@ -920,6 +994,6 @@ if __name__=="__main__":
     colors=args.colors, cmap=args.cmap, factor=args.factor,fmt=args.fmt,maskzero=args.maskzero,draw_points=args.draw_points,
     draw_fmt=args.draw_fmt,text=args.text,textsize=args.textsize,xtrac=args.xtrac,
     label_lon=args.label_lon,label_lat=args.label_lat,fill_south=args.fill_south,
-    units=args.units,vertbar=args.vertbar)
+    units=args.units,vertbar=args.vertbar,figx=args.figx,figy=args.figy)
        
 
