@@ -164,7 +164,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
               scientific=False,cmap=None,colors=None,reverse_colors=False,glob=None,west=None,east=None,south=None,north=None,
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
               whitebg=False,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,nocoast=None,
-              draw_points=None,draw_fmt=None,fontsizes=None):
+              draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None):
 
     # short cuts
     projections = { 'none'          : ( None               , 'global' ),
@@ -229,6 +229,8 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             varnames_to_read = varnames_to_read + vec_names
  
     fld_in = []
+    print("filenames to read: ",filenames_to_read)
+    print("varnames to read: ",varnames_to_read)
     for filename,varname in zip(filenames_to_read,varnames_to_read):
         print('Reading '+varname+' from '+filename)
         fld_in.append(gt.read_cube(filename,varname))
@@ -239,10 +241,14 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     print('regrid_vector is : ',regrid_vector)
 
     fontsizes_list = [14,12,10]
-    for count,fontsize in enumerate(fontsizes):
-        if fontsize is not None:
-            fontsizes_list[count]=fontsize
+    if fontsizes is not None:
+        for count,fontsize in enumerate(fontsizes):
+            if fontsize is not None:
+                fontsizes_list[count]=fontsize
     fontsizes = fontsizes_list
+
+    if clinewidth is None:
+        clinewidth=0.5
 
 # Organise control parameters that apply to individual fields.
 # In general with multiple fields and a single value of the control
@@ -559,6 +565,9 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                     levs_array = levs_neg + levs_pos
             else:
                 levs_array = np.linspace(mnfld_i,mxfld_i,nlevs_i+1) 
+                # option to have a single contour:
+                if len(levs_array) == 2 and levs_array[0] == levs_array[1]:
+                    levs_array=[levs_array[0]] 
             levs.append(levs_array)
 
             if colors is None and nscalar == 2:
@@ -705,18 +714,22 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             print('levs_i : ',levs_i)
             if plot_type == 'l':
                 ### contour lines ###
-                csline=plt.contour(x_i,y_i,fldproj_i.data,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,colors=colors,linewidths=0.5)
+                csline=plt.contour(x_i,y_i,fldproj_i.data,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
+                                   colors=colors,linewidths=clinewidth)
             elif plot_type == 'c':
                 ### colour-filled contours ###
-                cscolor=plt.contourf(x_i,y_i,fldproj_i.data,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,cmap=cmap,extend='both')
+                cscolor=plt.contourf(x_i,y_i,fldproj_i.data,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
+                                     cmap=cmap,extend='both')
             elif 'cl' in plot_type or 'lc' in plot_type:
                 ### colour-filled contours and lines for the same field ###
-                cscolor=plt.contourf(x_i,y_i,fldproj_i.data,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,cmap=cmap,extend='both')
+                cscolor=plt.contourf(x_i,y_i,fldproj_i.data,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
+                                     cmap=cmap,extend='both')
                 if len(levs_i) > 10 and 'f' not in plot_type:
                     levs_line = levs_i[::2]
                 else:
                     levs_line = levs_i
-                csline=plt.contour(x_i,y_i,fldproj_i.data,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,colors="black",linewidths=0.5)
+                csline=plt.contour(x_i,y_i,fldproj_i.data,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
+                                   colors="black",linewidths=clinewidth)
             elif plot_type == 'b':
                 ### block plot ###
                 cscolor = plt.pcolormesh(xbounds_i, ybounds_i, fldproj_i.data, cmap=cmap, vmin=levs_i[0], vmax=levs_i[-1])
@@ -727,7 +740,8 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                     levs_line = levs_i[::2]
                 else:
                     levs_line = levs_i
-                csline=plt.contour(x_i,y_i,fldproj_i.data,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,colors="black",linewidths=0.5)
+                csline=plt.contour(x_i,y_i,fldproj_i.data,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
+                                   colors="black",linewidths=clinewidth)
             else:
                 raise Exception("Error: Something has gone wrong. Scalar plot_type should be 'l' or 'c' or 'b' or 'cl' or 'lc'")
 
@@ -846,6 +860,8 @@ if __name__=="__main__":
                     help="plot to output file - filetype by extension. If unset plot to GUI.")
     parser.add_argument("-n", "--nlevs", action="store",dest="nlevs",type=int,default=15,nargs="+",
                     help="number of contour levels")
+    parser.add_argument("-L", "--clinewidth", action="store",dest="clinewidth",type=float,default=0.5,
+                    help="width of contour lines (default 0.5)")
     parser.add_argument("-f", "--mnfld", action="store",dest="mnfld",default=None,nargs="+",
                     help="minimum field value(s) to plot for colour filled contouring - specify None for default")
     parser.add_argument("-F", "--mxfld", action="store",dest="mxfld",default=None,nargs="+",
@@ -908,7 +924,7 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     plot_nemo(filenames=args.filenames,sca_names=args.sca_names,vec_names=args.vec_names,rec=args.rec,level=args.level,
-              nlevs=args.nlevs,mnfld=args.mnfld,mxfld=args.mxfld,
+              nlevs=args.nlevs,mnfld=args.mnfld,mxfld=args.mxfld,clinewidth=args.clinewidth,
               title=args.title,glob=args.glob,west=args.west,east=args.east,south=args.south,north=args.north,proj=args.proj,
               maskfile=args.maskfile,outfile=args.outfile,bottom=args.bottom,scientific=args.scientific,
               reverse_colors=args.reverse_colors,logscale=args.logscale,factor=args.factor,zeromean=args.zeromean,
