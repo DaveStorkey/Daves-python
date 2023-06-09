@@ -497,9 +497,10 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
         raise Exception("Error: should only specify one (or neither) of label_lon and label_lat")
 
     fontsizes_list = [14,12,10,8]
-    for count,fontsize in enumerate(fontsizes):
-        if fontsize is not None:
-            fontsizes_list[count]=fontsize
+    if fontsizes is not None:
+        for count,fontsize in enumerate(fontsizes):
+            if fontsize is not None:
+                fontsizes_list[count]=fontsize
     fontsizes = fontsizes_list
 
     csline=None
