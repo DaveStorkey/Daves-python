@@ -20,7 +20,7 @@ import numpy.ma as ma
 
 def plot_histogram(filename=None, var=None, outfile=None, coordsfilename=None, cell_area=None, cell_volume=None, 
                    logy=False, nbins=None, grid=None, xmin=None, xmax=None, ymin=None, ymax=None, rec=None, 
-                   printvalues=False, fieldlabel=None, noshow=None):
+                   printvalues=False, textout=None, fieldlabel=None, noshow=None):
 
     if nbins is None:
         nbins=50
@@ -34,6 +34,7 @@ def plot_histogram(filename=None, var=None, outfile=None, coordsfilename=None, c
         infield_coords=infile.variables[var].coordinates
     elif isinstance(var,np.ndarray):
         infield=var
+        print('histogram: infield.shape : ',infield.shape)
     else:
         raise Exception("Error : either specify input file and variable name or pass in numpy array")
 
@@ -123,6 +124,10 @@ def plot_histogram(filename=None, var=None, outfile=None, coordsfilename=None, c
     if printvalues:
         for (b1,b2,h) in zip(bins[0:-1],bins[1:],hist):
             print(b1,b2,h)
+    if textout:
+        with open(textout,'w') as dataout:
+            for (b1,b2,h) in zip(bins[0:-1],bins[1:],hist):
+                dataout.write(f'{b1:.1f},{b2:.1f},{h:05d}\n') 
     width = 0.8 * (bins[1] - bins[0])
     center = (bins[:-1] + bins[1:]) / 2
     plt.bar(center, hist, align='center', width=width)
@@ -153,6 +158,7 @@ def plot_histogram(filename=None, var=None, outfile=None, coordsfilename=None, c
         plt.gca().set_ylabel('number of points')
     if outfile:
         plt.savefig(outfile,dpi=200)
+        plt.close()
     elif not noshow:
         plt.show()
 
@@ -185,9 +191,11 @@ if __name__=="__main__":
                     help="log scale for y-axis")
     parser.add_argument("-p", "--print", action="store_true",dest="printvalues",default=False,
                     help="print out bins and values of the histogram as well as plotting ")
+    parser.add_argument("-t", "--textout", action="store",dest="textout",default=None,
+                    help="if set, write histogram values to this text file.")
  
     args = parser.parse_args()
 
     plot_histogram(filename=args.filename, var=args.varname, outfile=args.outfile, coordsfilename=args.coordsfilename, grid=args.grid,
-                   logy=args.logy, rec=args.rec, nbins=args.nbins, fieldlabel=args.fieldlabel,
+                   logy=args.logy, rec=args.rec, nbins=args.nbins, fieldlabel=args.fieldlabel, textout=args.textout,
                    xmin=args.xmin, xmax=args.xmax, ymin=args.ymin, ymax=args.ymax, printvalues=args.printvalues)
