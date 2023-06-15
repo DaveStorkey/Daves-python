@@ -54,7 +54,15 @@ def bathy_from_domcfg(domcfg=None, meshmask=None, bathymeter=None, bathylevel=No
                     break
             else:
                 raise Exception("Could not find vertical dimension")
-            e3t_0 = data_in.variables['e3t'][:]
+            for e3t_name in ['e3t','e3t_0']:
+                try:
+                    e3t_0 = data_in.variables[e3t_name][:]
+                except KeyError:
+                    pass
+                else:
+                    break
+            else:
+                raise Exception("Could not find cell thickness (e3t)")
             tmask = data_in.variables['tmask'][:]
             nav_lon = data_in.variables['nav_lon'][:]
             nav_lat = data_in.variables['nav_lat'][:]
