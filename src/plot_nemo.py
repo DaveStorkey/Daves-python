@@ -43,8 +43,12 @@ Aug 2021  : Bug fix for the case where you want to plot vector magnitude in colo
 Feb 2022  : nocoast option. DS.
             fix limited area plotting for "none" projection. DS. 
 
-To do    : 1. Add lat/lon tickmarks (look at Ocean Assess)
-           2. Size the figure in a clever way depending on the aspect ratio of the input data. DS. 
+July 2023 : Get the option to plot lines working (eg. to mark location of section). As part 
+            of this update the workaround for ORCA grids to use Daley's method using cartopy
+            img_transform (in the project_field routine - keep the old project_cube routine
+            for a while for reference). 
+
+To do    : 1. Size the figure in a clever way depending on the aspect ratio of the input data. DS. 
 
 
 @author: Dave Storkey
@@ -79,7 +83,33 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
+def project_field(field_in, lons_in, lats_in, proj=None, bounds=False):
+
+    # new routine (July 2023) using Daley's method to reproject field as workaround
+    # for Iris (or matplotlib?) not being able to handle ORCA grids. 
+
+    # Determine number of pixels in the subplot
+    bbox = plt.gca().get_window_extent().transformed(plt.gcf().dpi_scale_trans.inverted())
+    nx = int(bbox.width * plt.gcf().get_dpi())
+    ny = int(bbox.height * plt.gcf().get_dpi())
+
+    # Reproject the data onto a regular grid (with dimensions set by the number of pixels in the subplot, as above)
+    x_extent = plt.gca().get_extent()[:2]
+    y_extent = plt.gca().get_extent()[-2:]
+    x, y = ctpy.img_transform.mesh_projection(proj, nx, ny, x_extents=x_extent, y_extents=y_extent)[:2]
+    field_out = ctpy.img_transform.regrid(field_in, lons_in, lats_in, ccrs.PlateCarree(), proj, x, y)
+
+    if bounds:
+        # need to guess the coordinate bounds because Iris doesn't do bounds
+        # for 2D auxillary coordinates (even though they are in the files).
+        xbounds,ybounds = guess_bounds(x,y)
+        return x,y,field_out,xbounds,ybounds
+    else:
+        return x,y,field_out
+
 def project_cube(cube_in, proj=None, bounds=False):
+
+    # As of July 2023 this routine isn't used any more. Keeping it for a while for reference. 
 
     # NB. iris.analysis.cartography.project doesn't actually do a projection (ho hum), it does an *interpolation*
     #     to a regular grid in the desired projection. (nx,ny) specify the dimensions of the *global* target grid. 
@@ -97,6 +127,7 @@ def project_cube(cube_in, proj=None, bounds=False):
     cube_out, extent = iris.analysis.cartography.project(cube_in, proj, nx=nx, ny=ny)
     x = cube_out.coord('projection_x_coordinate').points
     y = cube_out.coord('projection_y_coordinate').points
+
     if bounds:
         # need to guess the coordinate bounds because Iris doesn't do bounds
         # for 2D auxillary coordinates (even though they are in the files).
@@ -164,7 +195,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
               scientific=False,cmap=None,colors=None,reverse_colors=False,glob=None,west=None,east=None,south=None,north=None,
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
               whitebg=False,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,nocoast=None,
-              draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None):
+              draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None,no_reproj=False):
 
     # short cuts
     projections = { 'none'          : ( None               , 'global' ),
@@ -581,72 +612,13 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
 
             # sort out colour map for filled or line contouring
             if cmap is not None and ('c' in plot_type or 'b' in plot_type):
-#                if cmap == 'Rainbow':
-#                    # shortcut for old IDL rainbow colour map:
-#                    cmap = monty.clr_cmap('/home/h04/frsy/IDL/rainbow_diff_nice.clr')
-#                    cmap.set_under(cmap(0.01))
-#                    cmap.set_over(cmap(0.99))
-#                elif '/' in cmap:
-#                    # this is pointing to a file so use monty.clr_cmap:                
-#                    print('reading colour map using monty.clr_cmap')
-#                    cmap = monty.clr_cmap(cmap)
-#                else:
                 # assume that it refers to a matplotlib inbuilt colour map:
                 print('reading inbuilt matplotlib colour map')
                 cmap = getattr(matplotlib.cm,cmap)
                 if reverse_colors:
                     cmap = mcolors.ListedColormap(cmap(np.arange(255,-1,-1)))
 
-#                ind = np.intp(np.rint(np.linspace(2,255,nlevs_i+1))).tolist()    
-# ensure we have white space in the middle for an odd number of levels.
-#                if 2*(nlevs_i/2) != nlevs_i:
-#                    ind[nlevs_i/2] = 127
-#                print('ind',ind)
-#                cmap=cmap(ind)
-
         print('len(levs) : ',len(levs))
-
-    # Create new "projected" cubes. Shouldn't really have to do this but need
-    # it a workaround for a cartopy bug. Note that the fields are all on the
-    # same grid, so (x,y) is the same for each field.
-
-    fldproj = []
-    x=[]
-    y=[]
-    xbounds=[]
-    ybounds=[]
-
-    if p[0] is None:
-        # no projection
-        for fldslice_i, plot_type in zip(fldslice,plot_types):
-            print('fldslice_i.shape : ',fldslice_i.shape)
-            fldproj.append(fldslice_i)
-            x.append(fldslice_i.coord('longitude').points)
-            y.append(fldslice_i.coord('latitude').points)
-            if 'b' in plot_type:
-                xbounds_i,ybounds_i = guess_bounds(x[-1],y[-1])
-                xbounds.append(xbounds_i)
-                ybounds.append(ybounds_i)
-            else:
-                xbounds.append(None)
-                ybounds.append(None)
-            print('min/max x : ',np.amin(x),np.amax(x))
-            print('min/max y : ',np.amin(y),np.amax(y))
-    else:
-        for fldslice_i, plot_type in zip(fldslice,plot_types):
-            if 'b' in plot_type:
-                projinfo = project_cube(fldslice_i, proj=p[0], bounds=True)
-            else:
-                projinfo = project_cube(fldslice_i, proj=p[0], bounds=False)
-            x.append(projinfo[0])
-            y.append(projinfo[1])
-            fldproj.append(projinfo[2])
-            if 'b' in plot_type:
-                xbounds.append(projinfo[3])
-                ybounds.append(projinfo[4])
-            else:
-                xbounds.append(None)
-                ybounds.append(None)
 
     if figx is None:
         figx = matplotlib.rcParams["figure.figsize"][0]
@@ -704,6 +676,49 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             gl.xformatter = LONGITUDE_FORMATTER
             gl.yformatter = LATITUDE_FORMATTER
 
+    # Create new "projected" cubes. Shouldn't really have to do this but need
+    # it a workaround for a cartopy bug. Note that the fields are all on the
+    # same grid, so (x,y) is the same for each field.
+
+    fldproj = []
+    x=[]
+    y=[]
+    xbounds=[]
+    ybounds=[]
+
+    if p[0] is None or no_reproj:
+        # no projection
+        for fldslice_i, plot_type in zip(fldslice,plot_types):
+            print('fldslice_i.shape : ',fldslice_i.shape)
+            fldproj.append(fldslice_i)
+            x.append(fldslice_i.coord('longitude').points)
+            y.append(fldslice_i.coord('latitude').points)
+            if 'b' in plot_type:
+                xbounds_i,ybounds_i = guess_bounds(x[-1],y[-1])
+                xbounds.append(xbounds_i)
+                ybounds.append(ybounds_i)
+            else:
+                xbounds.append(None)
+                ybounds.append(None)
+            print('min/max x : ',np.amin(x),np.amax(x))
+            print('min/max y : ',np.amin(y),np.amax(y))
+    else:
+        for fldslice_i, lons_i, lats_i, plot_type in zip(fldslice,lons,lats,plot_types):
+            if 'b' in plot_type:
+                projinfo = project_field(fldslice_i.data, lons_i, lats_i, proj=p[0], bounds=True)
+            else:
+                projinfo = project_field(fldslice_i.data, lons_i, lats_i, proj=p[0], bounds=False)
+            x.append(projinfo[0])
+            y.append(projinfo[1])
+            fldproj.append(projinfo[2])
+            print("projected cube: ",projinfo[2])
+            if 'b' in plot_type:
+                xbounds.append(projinfo[3])
+                ybounds.append(projinfo[4])
+            else:
+                xbounds.append(None)
+                ybounds.append(None)
+
     csline=None
     cscolor=None
     csarrows=None
@@ -714,33 +729,33 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             print('levs_i : ',levs_i)
             if plot_type == 'l':
                 ### contour lines ###
-                csline=plt.contour(x_i,y_i,fldproj_i.data,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
+                csline=plt.contour(x_i,y_i,fldproj_i,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
                                    colors=colors,linewidths=clinewidth)
             elif plot_type == 'c':
                 ### colour-filled contours ###
-                cscolor=plt.contourf(x_i,y_i,fldproj_i.data,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
+                cscolor=plt.contourf(x_i,y_i,fldproj_i,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
                                      cmap=cmap,extend='both')
             elif 'cl' in plot_type or 'lc' in plot_type:
                 ### colour-filled contours and lines for the same field ###
-                cscolor=plt.contourf(x_i,y_i,fldproj_i.data,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
+                cscolor=plt.contourf(x_i,y_i,fldproj_i,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
                                      cmap=cmap,extend='both')
                 if len(levs_i) > 10 and 'f' not in plot_type:
                     levs_line = levs_i[::2]
                 else:
                     levs_line = levs_i
-                csline=plt.contour(x_i,y_i,fldproj_i.data,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
+                csline=plt.contour(x_i,y_i,fldproj_i,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
                                    colors="black",linewidths=clinewidth)
             elif plot_type == 'b':
                 ### block plot ###
-                cscolor = plt.pcolormesh(xbounds_i, ybounds_i, fldproj_i.data, cmap=cmap, vmin=levs_i[0], vmax=levs_i[-1])
+                cscolor = plt.pcolormesh(xbounds_i, ybounds_i, fldproj_i, cmap=cmap, vmin=levs_i[0], vmax=levs_i[-1])
             elif 'bl' in plot_type or 'lb' in plot_type:
                 ### block plot and lines for the same field ###
-                cscolor = plt.pcolormesh(xbounds_i, ybounds_i, fldproj_i.data, cmap=cmap, vmin=levs_i[0], vmax=levs_i[-1])
+                cscolor = plt.pcolormesh(xbounds_i, ybounds_i, fldproj_i, cmap=cmap, vmin=levs_i[0], vmax=levs_i[-1])
                 if len(levs_i) > 10 and 'f' not in plot_type:
                     levs_line = levs_i[::2]
                 else:
                     levs_line = levs_i
-                csline=plt.contour(x_i,y_i,fldproj_i.data,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
+                csline=plt.contour(x_i,y_i,fldproj_i,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
                                    colors="black",linewidths=clinewidth)
             else:
                 raise Exception("Error: Something has gone wrong. Scalar plot_type should be 'l' or 'c' or 'b' or 'cl' or 'lc'")
@@ -802,7 +817,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
 
     if draw_points is not None:
         if len(draw_points)%4 != 0:
-            raise Exception("Error: number of draw_points (-d) must be a multiple of 4: start_x,start_depth,end_x,end_depth")
+            raise Exception("Error: number of draw_points (-d) must be a multiple of 4: start_x,start_y,end_x,end_y")
         fmt = "k-"  # default to black solid lines        
         linewidth = 2
         if draw_fmt is not None:
@@ -814,7 +829,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             plot_x = [draw_points[ii],draw_points[ii+2]]
             plot_y = [draw_points[ii+1],draw_points[ii+3]]
             print("Plotting : ",plot_x,plot_y," on projection ",p[0])
-            plt.gca().plot(plot_x[:],plot_y[:],fmt,linewidth=linewidth,transform=p[0])
+            ax.plot(plot_x[:],plot_y[:],fmt,linewidth=linewidth,transform=ccrs.PlateCarree())
             
 
     # Plot title
@@ -908,6 +923,8 @@ if __name__=="__main__":
                     help="units (label for colour bar)")
     parser.add_argument("-w", "--whitebg", action="store_true",dest="whitebg",
                     help="White background for plots. Don't apply stock image of land/ocean topography.")
+    parser.add_argument("--no_reproj", action="store_true",dest="no_reproj",
+                    help="Don't use the reprojection workaround.")
     parser.add_argument("--noshow", action="store_true",dest="noshow",
                     help="Don't run plt.show() even if no output file specified (for calls from other python routines).")
     parser.add_argument("--nocoast", action="store_true",dest="nocoast",
@@ -916,7 +933,7 @@ if __name__=="__main__":
                     help="x-dimension of figure (in inches I think)")
     parser.add_argument("--figy", action="store",dest="figy",default=None,
                     help="y-dimension of figure (in inches I think)")
-    parser.add_argument("--draw_points", action="store",dest="draw_points",nargs="+",
+    parser.add_argument("--draw_points", action="store",dest="draw_points",type=float,nargs="+",
                     help="list of points to draw line segments between in groups of four: start_lon,start_lat,end_lon,end_lat")
     parser.add_argument("--draw_fmt", action="store",dest="draw_fmt",nargs="+",
                     help="first argument is format for line segments as for fmt keyword for pyplot.plot; second optional argument is line thickness")
@@ -930,5 +947,6 @@ if __name__=="__main__":
               reverse_colors=args.reverse_colors,logscale=args.logscale,factor=args.factor,zeromean=args.zeromean,
               plot_types=args.plot_types,arrows=args.arrows,whitebg=args.whitebg,vertbar=args.vertbar,
               colors=args.colors,cmap=args.cmap,noshow=args.noshow,units=args.units,nobar=args.nobar,fontsizes=args.fontsizes,
-              figx=args.figx,figy=args.figy,nocoast=args.nocoast,draw_points=args.draw_points,draw_fmt=args.draw_fmt)        
+              figx=args.figx,figy=args.figy,nocoast=args.nocoast,draw_points=args.draw_points,draw_fmt=args.draw_fmt,
+              no_reproj=args.no_reproj)        
     
