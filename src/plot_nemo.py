@@ -44,9 +44,9 @@ Feb 2022  : nocoast option. DS.
             fix limited area plotting for "none" projection. DS. 
 
 July 2023 : Get the option to plot lines working (eg. to mark location of section). As part 
-            of this update the workaround for ORCA grids to use Daley's method using cartopy
+            of this, update the workaround for ORCA grids to use Daley's method using cartopy
             img_transform (in the project_field routine - keep the old project_cube routine
-            for a while for reference). 
+            for a while for reference). Also add text option. DS.
 
 To do    : 1. Size the figure in a clever way depending on the aspect ratio of the input data. DS. 
 
@@ -92,6 +92,7 @@ def project_field(field_in, lons_in, lats_in, proj=None, bounds=False):
     bbox = plt.gca().get_window_extent().transformed(plt.gcf().dpi_scale_trans.inverted())
     nx = int(bbox.width * plt.gcf().get_dpi())
     ny = int(bbox.height * plt.gcf().get_dpi())
+    print("Reprojection nx,ny : ",nx,ny)
 
     # Reproject the data onto a regular grid (with dimensions set by the number of pixels in the subplot, as above)
     x_extent = plt.gca().get_extent()[:2]
@@ -195,7 +196,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
               scientific=False,cmap=None,colors=None,reverse_colors=False,glob=None,west=None,east=None,south=None,north=None,
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
               whitebg=False,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,nocoast=None,
-              draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None,no_reproj=False):
+              draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None,no_reproj=False,text=None):
 
     # short cuts
     projections = { 'none'          : ( None               , 'global' ),
@@ -814,7 +815,6 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         plt.quiverkey(csarrows, X=0.8, Y=-0.05, U=key_arrow_length, label=arrow_label, labelpos='E')
 
     # Line segments
-
     if draw_points is not None:
         if len(draw_points)%4 != 0:
             raise Exception("Error: number of draw_points (-d) must be a multiple of 4: start_x,start_y,end_x,end_y")
@@ -831,9 +831,17 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             print("Plotting : ",plot_x,plot_y," on projection ",p[0])
             ax.plot(plot_x[:],plot_y[:],fmt,linewidth=linewidth,transform=ccrs.PlateCarree())
             
+    # Text
+    if text is not None:
+        if type(text) is list:
+            if len(text)%3 !=0:
+                raise Exception('Error: must specify sets of 3 arguments for text: x, y, s. As for matplotlib text.')
+        else:
+            raise Exception('Error: text should consist of multiples of 3 arguments.')
+        for ii in range(0,len(text),3):
+            ax.text(float(text[ii]),float(text[ii+1]),text[ii+2],fontsize=fontsizes[1],transform=ccrs.PlateCarree())
 
     # Plot title
-
     if title is not None:
         title=textwrap.fill(title,70)
         if subplot is not None:
@@ -923,6 +931,8 @@ if __name__=="__main__":
                     help="units (label for colour bar)")
     parser.add_argument("-w", "--whitebg", action="store_true",dest="whitebg",
                     help="White background for plots. Don't apply stock image of land/ocean topography.")
+    parser.add_argument("-T", "--text", action="store",dest="text",nargs='+',
+                    help="text to add to plot - multiples of 3 arguments: x, y, s as for matplotlib text")
     parser.add_argument("--no_reproj", action="store_true",dest="no_reproj",
                     help="Don't use the reprojection workaround.")
     parser.add_argument("--noshow", action="store_true",dest="noshow",
@@ -948,5 +958,5 @@ if __name__=="__main__":
               plot_types=args.plot_types,arrows=args.arrows,whitebg=args.whitebg,vertbar=args.vertbar,
               colors=args.colors,cmap=args.cmap,noshow=args.noshow,units=args.units,nobar=args.nobar,fontsizes=args.fontsizes,
               figx=args.figx,figy=args.figy,nocoast=args.nocoast,draw_points=args.draw_points,draw_fmt=args.draw_fmt,
-              no_reproj=args.no_reproj)        
+              no_reproj=args.no_reproj,text=args.text)        
     
