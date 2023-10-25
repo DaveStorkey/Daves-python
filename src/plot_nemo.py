@@ -501,8 +501,9 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         for lons_i, lats_i, fldslice_i in zip(lons[:],lats[:],fldslice[:]): 
             fldslice_i.data = ma.masked_where( ((lons_i < region[0]) | (lons_i > region[1])) , fldslice_i.data )
             fldslice_i.data = ma.masked_where( ((lats_i < region[2]) | (lats_i > region[3])) , fldslice_i.data )
-            if proj == 'none':
-                # cut out the field in this case because ax.set_extent doesn't work with no projection
+            if proj == 'none' or zeromean:
+                # Cut out the field for proj='none' because ax.set_extent doesn't work with no projection.
+                # Also for the zeromean case because I think iris_cube.collapsed doesn't take account of masking :(
                 # Note that here we can't just redefine fldslice_i as the cutout field because fldslice_i
                 # is only a view on the original array, which isn't modified in this case. Instead we have
                 # to create a new list of arrays fldslice_cutout and make the substition after the end of the loop.
@@ -517,7 +518,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             else:
                 fldslice_cutout.append(fldslice_i)
 
-    fldslice[:] = fldslice_cutout[:]
+        fldslice[:] = fldslice_cutout[:]
 
     # Apply factor if required:
 
