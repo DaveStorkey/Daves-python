@@ -537,12 +537,12 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                 if zeromean_i:
                     print("Reading cell_area from "+filename_to_read)
                     try:
-                        cell_area = iris.load_cube(filename_to_read,'cell_area')
-                    except(iris.exceptions.ConstraintMismatchError):
+                        cell_area = fldslice_i.cell_measures()[0].core_data()
+                    except(iris.exceptions.AttributeError):
                         raise Exception('Could not read cell_area from file.\n'+
                                         'For the zero mean option you need a field called cell_area \n'+
                                         'in the file with the correct coordinates attribute set.')
-                    area_mean = fldslice_i.collapsed(['longitude','latitude'],iris.analysis.MEAN,weights=cell_area.data)
+                    area_mean = fldslice_i.collapsed(['longitude','latitude'],iris.analysis.MEAN,weights=cell_area)
                     print('area_mean.data : ',area_mean.data)
                     fldslice_i.data = fldslice_i.data - area_mean.data
 
