@@ -518,7 +518,9 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             else:
                 fldslice_cutout.append(fldslice_i)
 
-        fldslice[:] = fldslice_cutout[:]
+        if not zeromean:
+            # if zeromean we just keep the fldslice_cutout as a separate array for the area meaning.
+            fldslice[:] = fldslice_cutout[:]
 
     # Apply factor if required:
 
@@ -533,17 +535,19 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         if not nscalar:
             raise Exception("Error : zero mean option doesn't work for vector fields.")
         else:
-            for filename_to_read,fldslice_i,zeromean_i in zip(filenames_to_read[:nscalar],fldslice[:nscalar],zeromean):
+            for filename_to_read,fldslice_i,fldslice_cutout_i,zeromean_i in \
+                                  zip(filenames_to_read[:nscalar],fldslice[:nscalar],fldslice_cutout[:nscalar],zeromean):
                 print('fldslice_i.standard_name, zeromean_i : ',fldslice_i.standard_name, zeromean_i)
                 if zeromean_i:
                     print("Reading cell_area from "+filename_to_read)
                     try:
-                        cell_area = fldslice_i.cell_measures()[0].core_data()
+                        cell_area = fldslice_cutout_i.cell_measures()[0].core_data()
                     except(iris.exceptions.AttributeError):
                         raise Exception('Could not read cell_area from file.\n'+
                                         'For the zero mean option you need a field called cell_area \n'+
                                         'in the file with the correct coordinates attribute set.')
-                    area_mean = fldslice_i.collapsed(['longitude','latitude'],iris.analysis.MEAN,weights=cell_area)
+                    area_mean = fldslice_cutout_i.collapsed(['longitude','latitude'],iris.analysis.MEAN,weights=cell_area)
+                    print('min/max fldslice_cutout_i : ',fldslice_cutout_i.data.min(),fldslice_cutout_i.data.max())
                     print('area_mean.data : ',area_mean.data)
                     fldslice_i.data = fldslice_i.data - area_mean.data
 
