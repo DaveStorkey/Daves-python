@@ -499,11 +499,14 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     fldslice_cutout=[]
     if region != 'global':
         for lons_i, lats_i, fldslice_i in zip(lons[:],lats[:],fldslice[:]): 
-            fldslice_i.data = ma.masked_where( ((lons_i < region[0]) | (lons_i > region[1])) , fldslice_i.data )
-            fldslice_i.data = ma.masked_where( ((lats_i < region[2]) | (lats_i > region[3])) , fldslice_i.data )
-            if proj == 'none' or zeromean:
+            # ma.masked_where creates a copy of the input array by default. If you set the output
+            # array as the same array as the input array this seems to cause problems. So create a
+            # new array and copy the data back into the original array ( = data array of the cube).
+            masked_data = ma.masked_where( ((lons_i < region[0]) | (lons_i > region[1])) , fldslice_i.data )
+            masked_data = ma.masked_where( ((lats_i < region[2]) | (lats_i > region[3])) , fldslice_i.data )
+            fldslice_i.data = masked_data
+            if proj == 'none':
                 # Cut out the field for proj='none' because ax.set_extent doesn't work with no projection.
-                # Also for the zeromean case because I think iris_cube.collapsed doesn't take account of masking :(
                 # Note that here we can't just redefine fldslice_i as the cutout field because fldslice_i
                 # is only a view on the original array, which isn't modified in this case. Instead we have
                 # to create a new list of arrays fldslice_cutout and make the substition after the end of the loop.
@@ -518,9 +521,9 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             else:
                 fldslice_cutout.append(fldslice_i)
 
-        if not zeromean:
-            # if zeromean we just keep the fldslice_cutout as a separate array for the area meaning.
-            fldslice[:] = fldslice_cutout[:]
+        fldslice[:] = fldslice_cutout[:]
+
+    print('min/max fldslice[0] : ',fldslice[0].data.min(),fldslice[0].data.max())
 
     # Apply factor if required:
 
@@ -535,21 +538,24 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         if not nscalar:
             raise Exception("Error : zero mean option doesn't work for vector fields.")
         else:
-            for filename_to_read,fldslice_i,fldslice_cutout_i,zeromean_i in \
-                                  zip(filenames_to_read[:nscalar],fldslice[:nscalar],fldslice_cutout[:nscalar],zeromean):
+            for filename_to_read,fldslice_i,zeromean_i in zip(filenames_to_read[:nscalar],fldslice[:nscalar],zeromean):
                 print('fldslice_i.standard_name, zeromean_i : ',fldslice_i.standard_name, zeromean_i)
                 if zeromean_i:
                     print("Reading cell_area from "+filename_to_read)
                     try:
-                        cell_area = fldslice_cutout_i.cell_measures()[0].core_data()
+                        cell_area = fldslice_i.cell_measures()[0].core_data()
+                        print("cell_area.shape : ",cell_area.shape )
                     except(iris.exceptions.AttributeError):
                         raise Exception('Could not read cell_area from file.\n'+
                                         'For the zero mean option you need a field called cell_area \n'+
                                         'in the file with the correct coordinates attribute set.')
-                    area_mean = fldslice_cutout_i.collapsed(['longitude','latitude'],iris.analysis.MEAN,weights=cell_area)
-                    print('min/max fldslice_cutout_i : ',fldslice_cutout_i.data.min(),fldslice_cutout_i.data.max())
+                    area_mean = fldslice_i.collapsed(['longitude','latitude'],iris.analysis.MEAN,weights=cell_area)
+                    print('min/max fldslice_i : ',fldslice_i.data.min(),fldslice_i.data.max())
                     print('area_mean.data : ',area_mean.data)
                     fldslice_i.data = fldslice_i.data - area_mean.data
+                    area_mean2 = fldslice_i.collapsed(['longitude','latitude'],iris.analysis.MEAN,weights=cell_area)
+                    print('min/max fldslice_i.data after zero mean : ',fldslice_i.data.min(),fldslice_i.data.max())
+                    print('area_mean2.data : ',area_mean2.data)
 
     # Calculate magnitude of vector field if there is one. If we are only plotting the vector field as arrows then 
     # this is used later to calculate the length of the key arrow. If we are also/instead contouring 
@@ -606,6 +612,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                 if len(levs_array) == 2 and levs_array[0] == levs_array[1]:
                     levs_array=[levs_array[0]] 
             levs.append(levs_array)
+            print('levs_array : ',levs_array)
 
             if colors is None and nscalar == 2:
                 # for a line contour plot over a filled contour plot default to black lines
