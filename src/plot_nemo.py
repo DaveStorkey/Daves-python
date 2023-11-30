@@ -48,6 +48,9 @@ July 2023 : Get the option to plot lines working (eg. to mark location of sectio
             img_transform (in the project_field routine - keep the old project_cube routine
             for a while for reference). Also add text option. DS.
 
+Nov 2023  : Various bug fixes (particularly for vector plotting) and a bit of
+            simplification. DS.
+
 To do    : 1. Size the figure in a clever way depending on the aspect ratio of the input data. DS. 
 
 
@@ -292,9 +295,9 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     if plot_types is None:
         plot_types=[]
         if nscalar == 1:
-            plot_types = plot_types+['c']
+            plot_types = ['c']
         elif nscalar == 2:
-            plot_types = plot_types+['c','l']
+            plot_types = ['c','l']
         if nvector:
             plot_types = plot_types+['a']
     else:
@@ -430,7 +433,6 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             else:
                fldslice.append(fldi)
 
-
         print('min/max fldslice : ',fldslice[-1].data.min(),fldslice[-1].data.max())
 
     # Do interpolation and rotation of vector fields *after* we have 
@@ -445,7 +447,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     if nvector and not mag_only and proj != 'none':
         fldslice[v1],fldslice[v2] = UaT.rotate(fldslice[v1],fldslice[v2])
 
-    # read in lat/lon coords for each scalar field slice (including vector magnitude)
+    # read in lat/lon coords for each scalar field slice
     lons=[]
     lats=[]
     for filenames_to_read_i,fldslice_i in zip(filenames_to_read,fldslice):
@@ -545,17 +547,13 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                     try:
                         cell_area = fldslice_i.cell_measures()[0].core_data()
                         print("cell_area.shape : ",cell_area.shape )
-                    except(iris.exceptions.AttributeError):
+                    except(AttributeError):
                         raise Exception('Could not read cell_area from file.\n'+
                                         'For the zero mean option you need a field called cell_area \n'+
                                         'in the file with the correct coordinates attribute set.')
                     area_mean = fldslice_i.collapsed(['longitude','latitude'],iris.analysis.MEAN,weights=cell_area)
-                    print('min/max fldslice_i : ',fldslice_i.data.min(),fldslice_i.data.max())
-                    print('area_mean.data : ',area_mean.data)
                     fldslice_i.data = fldslice_i.data - area_mean.data
                     area_mean2 = fldslice_i.collapsed(['longitude','latitude'],iris.analysis.MEAN,weights=cell_area)
-                    print('min/max fldslice_i.data after zero mean : ',fldslice_i.data.min(),fldslice_i.data.max())
-                    print('area_mean2.data : ',area_mean2.data)
 
     # Calculate magnitude of vector field if there is one. If we are only plotting the vector field as arrows then 
     # this is used later to calculate the length of the key arrow. If we are also/instead contouring 
@@ -568,8 +566,12 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         speed = ma.sqrt(u*u + v*v)
         if not nscalar and not vec_only:
             # Append vector magnitude to the beginning of the fldslice list.
+            # Also need to make sure the lists of lons, lats and plot_types are resized.
             nscalar=1; v1=1; v2=2;
-            plot_types = [plot_types[v1][0]]+plot_types[:]
+            # This is ok because u, v and speed are all at T-points at this stage.
+            lons = [lons[v1]]+lons[:]
+            lats = [lats[v1]]+lats[:]
+            plot_types = [plot_types[v1]]+plot_types[:]
             fldslice = [fldslice[0].copy()] + fldslice
             # hardwired for now - doesn't really matter
             fldslice[0].standard_name = "sea_water_speed"
@@ -614,14 +616,9 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             levs.append(levs_array)
             print('levs_array : ',levs_array)
 
-            if colors is None and nscalar == 2:
-                # for a line contour plot over a filled contour plot default to black lines
+            if colors is None:
+                # default to black for line contouring
                 colors = "black"
-
-            if colors is not None and nscalar == 1:
-                # colors takes precedence over cmap and matplotlib.pyplot.contour complains
-                # if you give it colors and cmap both as not None.
-                cmap = None
 
             # sort out colour map for filled or line contouring
             if cmap is not None and ('c' in plot_type or 'b' in plot_type):
@@ -631,6 +628,8 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                 if reverse_colors:
                     cmap = mcolors.ListedColormap(cmap(np.arange(255,-1,-1)))
 
+        print('colors : ',colors)
+        print('cmap : ',cmap)
         print('len(levs) : ',len(levs))
 
     if figx is None:
@@ -724,7 +723,6 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             x.append(projinfo[0])
             y.append(projinfo[1])
             fldproj.append(projinfo[2])
-            print("projected cube: ",projinfo[2])
             if 'b' in plot_type:
                 xbounds.append(projinfo[3])
                 ybounds.append(projinfo[4])
@@ -740,36 +738,21 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         for x_i,xbounds_i,y_i,ybounds_i,fldproj_i,plot_type,levs_i,fld_in_i in \
           zip(x[:nscalar],xbounds[:nscalar],y[:nscalar],ybounds[:nscalar],fldproj[:nscalar],plot_types[:nscalar],levs[:nscalar],fld_in[:nscalar]):
             print('levs_i : ',levs_i)
-            if plot_type == 'l':
-                ### contour lines ###
-                csline=plt.contour(x_i,y_i,fldproj_i,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
-                                   colors=colors,linewidths=clinewidth)
-            elif plot_type == 'c':
+            if 'c' in plot_type:
                 ### colour-filled contours ###
                 cscolor=plt.contourf(x_i,y_i,fldproj_i,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
                                      cmap=cmap,extend='both')
-            elif 'cl' in plot_type or 'lc' in plot_type:
-                ### colour-filled contours and lines for the same field ###
-                cscolor=plt.contourf(x_i,y_i,fldproj_i,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
-                                     cmap=cmap,extend='both')
-                if len(levs_i) > 10 and 'f' not in plot_type:
-                    levs_line = levs_i[::2]
-                else:
-                    levs_line = levs_i
-                csline=plt.contour(x_i,y_i,fldproj_i,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
-                                   colors="black",linewidths=clinewidth)
-            elif plot_type == 'b':
+            elif 'b' in plot_type:
                 ### block plot ###
                 cscolor = plt.pcolormesh(xbounds_i, ybounds_i, fldproj_i, cmap=cmap, vmin=levs_i[0], vmax=levs_i[-1])
-            elif 'bl' in plot_type or 'lb' in plot_type:
-                ### block plot and lines for the same field ###
-                cscolor = plt.pcolormesh(xbounds_i, ybounds_i, fldproj_i, cmap=cmap, vmin=levs_i[0], vmax=levs_i[-1])
+            if 'l' in plot_type:
+                ### contour lines ###
                 if len(levs_i) > 10 and 'f' not in plot_type:
                     levs_line = levs_i[::2]
                 else:
                     levs_line = levs_i
                 csline=plt.contour(x_i,y_i,fldproj_i,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
-                                   colors="black",linewidths=clinewidth)
+                                   colors=colors,linewidths=clinewidth)
             else:
                 raise Exception("Error: Something has gone wrong. Scalar plot_type should be 'l' or 'c' or 'b' or 'cl' or 'lc'")
 
@@ -817,8 +800,8 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             if len(arrows) > 3:
                 key_arrow_length=arrows[3]
         print("Plotting arrows")
-        csarrows = plt.quiver(x[v1][::arrow_subsample], y[v1][::arrow_subsample], 
-                   fldproj[v1].data[::arrow_subsample,::arrow_subsample], fldproj[v2].data[::arrow_subsample,::arrow_subsample], 
+        csarrows = plt.quiver(x[v1][::arrow_subsample,::arrow_subsample], y[v1][::arrow_subsample,::arrow_subsample], 
+                   fldproj[v1][::arrow_subsample,::arrow_subsample], fldproj[v2][::arrow_subsample,::arrow_subsample], 
                    color=arrow_colour, scale=arrow_scale, scale_units='inches', angles='xy' )
         if scientific:
             arrow_label = '%1.1e'%key_arrow_length+str(fld_in[v1].units)
