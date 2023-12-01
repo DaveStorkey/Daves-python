@@ -52,7 +52,9 @@ Nov 2023  : Various bug fixes (particularly for vector plotting) and a bit of
             simplification. DS.
 
 To do    : 1. Size the figure in a clever way depending on the aspect ratio of the input data. DS. 
-
+           2. Increase resolution of projected fields to get smoother line contouring. 
+           3. Unmask fields for polar stereographic plots so full rectangle of plot is filled.
+           4. Include read_cube as a routine in this module.
 
 @author: Dave Storkey
 '''
@@ -68,6 +70,7 @@ import matplotlib.figure as fig
 import matplotlib.colors as mcolors
 import matplotlib.cm
 import iris
+import iris.plot as iplt
 import cartopy as ctpy
 import cartopy.crs as ccrs
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
@@ -97,7 +100,8 @@ def project_field(field_in, lons_in, lats_in, proj=None, bounds=False):
     ny = int(bbox.height * plt.gcf().get_dpi())
     print("Reprojection nx,ny : ",nx,ny)
 
-    # Reproject the data onto a regular grid (with dimensions set by the number of pixels in the subplot, as above)
+    # Reproject the data onto a regular grid (with dimensions set by the number of pixels in the subplot, 
+    # as above)
     x_extent = plt.gca().get_extent()[:2]
     y_extent = plt.gca().get_extent()[-2:]
     x, y = ctpy.img_transform.mesh_projection(proj, nx, ny, x_extents=x_extent, y_extents=y_extent)[:2]
@@ -688,47 +692,50 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             gl.xformatter = LONGITUDE_FORMATTER
             gl.yformatter = LATITUDE_FORMATTER
 
-    # Create new "projected" cubes. Shouldn't really have to do this but need
-    # it a workaround for a cartopy bug. Note that the fields are all on the
-    # same grid, so (x,y) is the same for each field.
+    if nscalar: 
 
-    fldproj = []
-    x=[]
-    y=[]
-    xbounds=[]
-    ybounds=[]
+        # Create new "projected" cubes for scalar fields including vector magnitude. 
+        # Shouldn't really have to do this but need it a workaround for a cartopy bug. 
+        # Note that the fields are all on the same grid at this stage, 
+        # so (x,y) is the same for each field.
 
-    if p[0] is None or no_reproj:
-        # no projection
-        for fldslice_i, plot_type in zip(fldslice,plot_types):
-            print('fldslice_i.shape : ',fldslice_i.shape)
-            fldproj.append(fldslice_i)
-            x.append(fldslice_i.coord('longitude').points)
-            y.append(fldslice_i.coord('latitude').points)
-            if 'b' in plot_type:
-                xbounds_i,ybounds_i = guess_bounds(x[-1],y[-1])
-                xbounds.append(xbounds_i)
-                ybounds.append(ybounds_i)
-            else:
-                xbounds.append(None)
-                ybounds.append(None)
-            print('min/max x : ',np.amin(x),np.amax(x))
-            print('min/max y : ',np.amin(y),np.amax(y))
-    else:
-        for fldslice_i, lons_i, lats_i, plot_type in zip(fldslice,lons,lats,plot_types):
-            if 'b' in plot_type:
-                projinfo = project_field(fldslice_i.data, lons_i, lats_i, proj=p[0], bounds=True)
-            else:
-                projinfo = project_field(fldslice_i.data, lons_i, lats_i, proj=p[0], bounds=False)
-            x.append(projinfo[0])
-            y.append(projinfo[1])
-            fldproj.append(projinfo[2])
-            if 'b' in plot_type:
-                xbounds.append(projinfo[3])
-                ybounds.append(projinfo[4])
-            else:
-                xbounds.append(None)
-                ybounds.append(None)
+        fldproj = []
+        x=[]
+        y=[]
+        xbounds=[]
+        ybounds=[]
+
+        if p[0] is None or no_reproj:
+            # no projection
+            for fldslice_i, plot_type in zip(fldslice[:nscalar],plot_types[:nscalar]):
+                print('fldslice_i.shape : ',fldslice_i.shape)
+                fldproj.append(fldslice_i)
+                x.append(fldslice_i.coord('longitude').points)
+                y.append(fldslice_i.coord('latitude').points)
+                if 'b' in plot_type:
+                    xbounds_i,ybounds_i = guess_bounds(x[-1],y[-1])
+                    xbounds.append(xbounds_i)
+                    ybounds.append(ybounds_i)
+                else:
+                    xbounds.append(None)
+                    ybounds.append(None)
+                print('min/max x : ',np.amin(x),np.amax(x))
+                print('min/max y : ',np.amin(y),np.amax(y))
+        else:
+            for fldslice_i, lons_i, lats_i, plot_type in zip(fldslice[:nscalar],lons[:nscalar],lats[:nscalar],plot_types[:nscalar]):
+                if 'b' in plot_type:
+                    projinfo = project_field(fldslice_i.data, lons_i, lats_i, proj=p[0], bounds=True)
+                else:
+                    projinfo = project_field(fldslice_i.data, lons_i, lats_i, proj=p[0], bounds=False)
+                x.append(projinfo[0])
+                y.append(projinfo[1])
+                fldproj.append(projinfo[2])
+                if 'b' in plot_type:
+                    xbounds.append(projinfo[3])
+                    ybounds.append(projinfo[4])
+                else:
+                    xbounds.append(None)
+                    ybounds.append(None)
 
     csline=None
     cscolor=None
@@ -800,9 +807,10 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             if len(arrows) > 3:
                 key_arrow_length=arrows[3]
         print("Plotting arrows")
-        csarrows = plt.quiver(x[v1][::arrow_subsample,::arrow_subsample], y[v1][::arrow_subsample,::arrow_subsample], 
-                   fldproj[v1][::arrow_subsample,::arrow_subsample], fldproj[v2][::arrow_subsample,::arrow_subsample], 
-                   color=arrow_colour, scale=arrow_scale, scale_units='inches', angles='xy' )
+        # For quiver plotting we use the iris.plot wrapper because it deals with the projection and vector rotation 
+        # "under the hood".
+        csarrows = iplt.quiver(fldslice[v1][::arrow_subsample,::arrow_subsample], fldslice[v2][::arrow_subsample,::arrow_subsample], 
+                               color=arrow_colour, scale=arrow_scale, scale_units='inches', axes=ax, pivot='mid')
         if scientific:
             arrow_label = '%1.1e'%key_arrow_length+str(fld_in[v1].units)
         else:        
