@@ -202,8 +202,8 @@ def guess_bounds(x,y):
 def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,mxfld=None,title=None,rec=0,level=1,bottom=False,
               scientific=False,cmap=None,colors=None,reverse_colors=False,glob=None,west=None,east=None,south=None,north=None,
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
-              whitebg=False,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,nocoast=None,
-              draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None,no_reproj=False,text=None):
+              whitebg=False,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,no_coast=None,
+              empty_coast=None,draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None,no_reproj=False,text=None):
 
     # short cuts
     projections = { 'none'          : ( None               , 'global' ),
@@ -309,7 +309,8 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             plot_types = [plot_types]
         if len(plot_types) != nfields:
             raise Exception("Error: number of values for plot_types (-p) doesn't match number of fields.")
-    
+    print('plot_types: ',plot_types)    
+
     vec_only = False
     mag_only = False
     if nvector:
@@ -672,8 +673,12 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         else:
             # default to grey over land
             facecolor='0.75'
-        if nocoast:
+        if no_coast:
             ax.set_facecolor(facecolor)
+        elif empty_coast:
+            # plot coastline only - no filling over interior.
+            feature = ctpy.feature.COASTLINE
+            ax.add_feature(feature,linewidth=2)
         else:
             feature = ctpy.feature.NaturalEarthFeature('physical', 'coastline', '50m',facecolor=facecolor,edgecolor='k')
             ax.add_feature(feature,linewidth=0.5)
@@ -745,22 +750,27 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         for x_i,xbounds_i,y_i,ybounds_i,fldproj_i,plot_type,levs_i,fld_in_i in \
           zip(x[:nscalar],xbounds[:nscalar],y[:nscalar],ybounds[:nscalar],fldproj[:nscalar],plot_types[:nscalar],levs[:nscalar],fld_in[:nscalar]):
             print('levs_i : ',levs_i)
+            plotted=False
             if 'c' in plot_type:
                 ### colour-filled contours ###
+                plotted=True
                 cscolor=plt.contourf(x_i,y_i,fldproj_i,levels=levs_i,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
                                      cmap=cmap,extend='both')
             elif 'b' in plot_type:
                 ### block plot ###
+                plotted=True
                 cscolor = plt.pcolormesh(xbounds_i, ybounds_i, fldproj_i, cmap=cmap, vmin=levs_i[0], vmax=levs_i[-1])
             if 'l' in plot_type:
                 ### contour lines ###
+                plotted=True
                 if len(levs_i) > 10 and 'f' not in plot_type:
                     levs_line = levs_i[::2]
                 else:
                     levs_line = levs_i
                 csline=plt.contour(x_i,y_i,fldproj_i,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
                                    colors=colors,linewidths=clinewidth)
-            else:
+            if not plotted: 
+                print('plot_type : ',plot_type)
                 raise Exception("Error: Something has gone wrong. Scalar plot_type should be 'l' or 'c' or 'b' or 'cl' or 'lc'")
 
             ### colour bar ###
@@ -940,8 +950,10 @@ if __name__=="__main__":
                     help="Don't use the reprojection workaround.")
     parser.add_argument("--noshow", action="store_true",dest="noshow",
                     help="Don't run plt.show() even if no output file specified (for calls from other python routines).")
-    parser.add_argument("--nocoast", action="store_true",dest="nocoast",
+    parser.add_argument("--no_coast", action="store_true",dest="no_coast",
                     help="Don't draw coastline.")
+    parser.add_argument("--empty_coast", action="store_true",dest="empty_coast",
+                    help="Draw coastline but don't fill interior.")
     parser.add_argument("--figx", action="store",dest="figx",default=None,
                     help="x-dimension of figure (in inches I think)")
     parser.add_argument("--figy", action="store",dest="figy",default=None,
@@ -960,6 +972,6 @@ if __name__=="__main__":
               reverse_colors=args.reverse_colors,logscale=args.logscale,factor=args.factor,zeromean=args.zeromean,
               plot_types=args.plot_types,arrows=args.arrows,whitebg=args.whitebg,vertbar=args.vertbar,
               colors=args.colors,cmap=args.cmap,noshow=args.noshow,units=args.units,nobar=args.nobar,fontsizes=args.fontsizes,
-              figx=args.figx,figy=args.figy,nocoast=args.nocoast,draw_points=args.draw_points,draw_fmt=args.draw_fmt,
-              no_reproj=args.no_reproj,text=args.text)        
+              figx=args.figx,figy=args.figy,no_coast=args.no_coast,empty_coast=args.empty_coast,
+              draw_points=args.draw_points,draw_fmt=args.draw_fmt,no_reproj=args.no_reproj,text=args.text)        
     
