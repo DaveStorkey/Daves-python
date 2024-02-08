@@ -203,7 +203,8 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
               scientific=False,cmap=None,colors=None,reverse_colors=False,glob=None,west=None,east=None,south=None,north=None,
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
               whitebg=False,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,no_coast=None,
-              empty_coast=None,draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None,no_reproj=False,text=None):
+              empty_coast=None,draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None,Bgrid=False,no_reproj=False,
+              text=None):
 
     # short cuts
     projections = { 'none'          : ( None               , 'global' ),
@@ -257,13 +258,16 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             v1 = nscalar
             v2 = nscalar+1
             # If separate files specified for each vector component assume we need to regrid to the T-grid.
-            # Otherwise both vector components in the same file and we don't need to regrid.
+            # Otherwise both vector components in the same file and we don't need to regrid. Note can force
+            # it to not regrid by setting the Bgrid keyword.
             if len(filenames) == 2:
                 regrid_vector = True
             elif len(filenames) == 1:
                 filenames = [filenames[0],filenames[0]] 
             else:
                 raise Exception('Error: need to specify one or two filenames for the vector components.')
+            if Bgrid:
+                regrid_vector=False
             filenames_to_read = filenames_to_read + filenames
             varnames_to_read = varnames_to_read + vec_names
  
@@ -946,6 +950,8 @@ if __name__=="__main__":
                     help="White background for plots. Don't apply stock image of land/ocean topography.")
     parser.add_argument("-T", "--text", action="store",dest="text",nargs='+',
                     help="text to add to plot - multiples of 3 arguments: x, y, s as for matplotlib text")
+    parser.add_argument("--Bgrid", action="store_true",dest="Bgrid",
+                    help="B-grid fields, so don't regrid vector fields.")
     parser.add_argument("--no_reproj", action="store_true",dest="no_reproj",
                     help="Don't use the reprojection workaround.")
     parser.add_argument("--noshow", action="store_true",dest="noshow",
@@ -972,6 +978,6 @@ if __name__=="__main__":
               reverse_colors=args.reverse_colors,logscale=args.logscale,factor=args.factor,zeromean=args.zeromean,
               plot_types=args.plot_types,arrows=args.arrows,whitebg=args.whitebg,vertbar=args.vertbar,
               colors=args.colors,cmap=args.cmap,noshow=args.noshow,units=args.units,nobar=args.nobar,fontsizes=args.fontsizes,
-              figx=args.figx,figy=args.figy,no_coast=args.no_coast,empty_coast=args.empty_coast,
+              figx=args.figx,figy=args.figy,no_coast=args.no_coast,empty_coast=args.empty_coast,Bgrid=args.Bgrid,
               draw_points=args.draw_points,draw_fmt=args.draw_fmt,no_reproj=args.no_reproj,text=args.text)        
     

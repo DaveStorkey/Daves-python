@@ -20,7 +20,9 @@ def rotate(ucube,vcube):
     elif ucube.shape[-1] == 4322 and ucube.shape[-2] == 3606:
         model='eORCA12'
     else:
-        raise Exception("Error: I can't guess which model it is to get the angles for vector rotation")
+        print("Error: I can't guess which model it is to get the angles for vector rotation")
+        print("       Continuing without rotation")
+        return ucube, vcube
 
     sin_t = gt.read_cube('/project/nemo/interp/nemo_remap/angle_'+model+'.nc','gsint')
     cos_t = gt.read_cube('/project/nemo/interp/nemo_remap/angle_'+model+'.nc','gcost')
@@ -39,30 +41,33 @@ def U_at_T_points(ucube,vcube):
     ulons = ucube.coord('longitude').points
     vlats = vcube.coord('latitude').points
 
-    # derive a mask on the T points
-    mask_U = ucube.data.mask.copy()
-    mask_U_m1 = np.roll(mask_U,1,axis=-1)
-    mask_V = vcube.data.mask.copy()
-    mask_V_m1 = np.roll(mask_V,1,axis=-2)
-    mask_T = ( mask_U & mask_U_m1 ) & ( mask_V & mask_V_m1 )
+    if ucube.data.mask:
+        # derive a mask on the T points
+        mask_U = ucube.data.mask.copy()
+        mask_U_m1 = np.roll(mask_U,1,axis=-1)
+        mask_V = vcube.data.mask.copy()
+        mask_V_m1 = np.roll(mask_V,1,axis=-2)
+        mask_T = ( mask_U & mask_U_m1 ) & ( mask_V & mask_V_m1 )
 
-    # this unmasks all points...
-    ucube.data[ucube.data.mask] = 0.0
-    vcube.data[vcube.data.mask] = 0.0
+        # this unmasks all points...
+        ucube.data[ucube.data.mask] = 0.0
+        vcube.data[vcube.data.mask] = 0.0
 
     # Average U field (and longitudes) in the x-direction.
     u_m1 = np.roll(ucube.data, 1,axis=-1)
     ulons_m1 = np.roll(ulons, 1,axis=-1)
     ucubeT = ucube.copy()
     ucubeT.data = 0.5 * ( ucube.data + u_m1 )
-    ucubeT.data.mask = mask_T
+    if ucube.data.mask:
+        ucubeT.data.mask = mask_T
 
     # Average V field (and latitudes) in the y-direction.
     v_m1 = np.roll(vcube.data, 1,axis=-2)
     vlats_m1 = np.roll(vlats, 1,axis=-2)
     vcubeT = vcube.copy()
     vcubeT.data = 0.5 * ( vcube.data + v_m1 )
-    vcubeT.data.mask = mask_T
+    if ucube.data.mask:
+        vcubeT.data.mask = mask_T
 
     # Set approximate lat/lon coordinates.
     ucubeT.coord('longitude').points = 0.5 * ( ulons + ulons_m1 )
