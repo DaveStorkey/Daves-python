@@ -508,6 +508,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     # the plotted area. Also so we can calculate the maximum vector length for the key arrow.
 
     fldslice_cutout=[]
+    mask_keep=[]
     if region != 'global':
         for lons_i, lats_i, fldslice_i in zip(lons[:],lats[:],fldslice[:]): 
             # ma.masked_where creates a copy of the input array by default. If you set the output
@@ -515,6 +516,9 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             # new array and copy the data back into the original array ( = data array of the cube).
             masked_data = ma.masked_where( ((lons_i < region[0]) | (lons_i > region[1])) , fldslice_i.data )
             masked_data = ma.masked_where( ((lats_i < region[2]) | (lats_i > region[3])) , fldslice_i.data )
+            # keep the original mask to reapply before plotting for polar stereographic plots 
+            # (to avoid the "circle in a square" effect). 
+            mask_keep.append(fldslice_i.data.mask)
             fldslice_i.data = masked_data
             if proj == 'none':
                 # Cut out the field for proj='none' because ax.set_extent doesn't work with no projection.
@@ -570,8 +574,9 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     # field slice to the beginning of the fldslice list.
      
     if nvector:
-        u = fldslice[v1].data
-        v = fldslice[v2].data
+        # apply the original mask for the calculation (because we may want to use this for the plotting)...
+        u = fldslice[v1].data; u.mask = mask_keep[v1]
+        v = fldslice[v2].data; v.mask = mask_keep[v2]
         speed = ma.sqrt(u*u + v*v)
         if not nscalar and not vec_only:
             # Append vector magnitude to the beginning of the fldslice list.
@@ -582,9 +587,12 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             lats = [lats[v1]]+lats[:]
             plot_types = [plot_types[v1]]+plot_types[:]
             fldslice = [fldslice[0].copy()] + fldslice
+            mask_keep = [mask_keep[0].copy()] + mask_keep
             # hardwired for now - doesn't really matter
             fldslice[0].standard_name = "sea_water_speed"
-            fldslice[0].data = speed[:]
+            fldslice[0].data = speed[:]  
+            # ... but apply the regional mask for now for calculations of min/max contours etc.
+            fldslice[0].data.mask = fldslice[v1].data.mask          
 
     # Calculate contour levels for contour plots and colour map for colour-filled contouring.
 
@@ -700,6 +708,12 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             gl.xlabel_style = gl.ylabel_style = {'size':fontsizes[2], 'color':'gray'}
             gl.xformatter = LONGITUDE_FORMATTER
             gl.yformatter = LATITUDE_FORMATTER
+
+    if 'ps' in proj and region != 'global':
+        # for polar stereographic plots reapply the original field mask to avoid
+        # "circle in a square" effect.
+        for fldslice_i, mask_i in zip(fldslice,mask_keep):
+            fldslice_i.data.mask = mask_i 
 
     if nscalar: 
 
