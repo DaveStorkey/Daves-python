@@ -202,7 +202,7 @@ def guess_bounds(x,y):
 def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,mxfld=None,title=None,rec=0,level=1,bottom=False,
               scientific=False,cmap=None,colors=None,reverse_colors=False,glob=None,west=None,east=None,south=None,north=None,
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
-              whitebg=False,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,no_coast=None,
+              facecolor=False,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,no_coast=None,
               empty_coast=None,draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None,Bgrid=False,no_reproj=False,
               text=None):
 
@@ -670,21 +670,15 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     else:
         ax = plt.axes(projection=p[0])
 
+    if facecolor is None:
+        facecolor="0.75"
+
     if p[0] is None:
         # In this case it will label lat and lon values along the axes, so add axis labels
         ax.set_xlabel("longitude (deg east)")
         ax.set_ylabel("latitude (deg north)")
-        if whitebg:
-            ax.set_facecolor('1')
-        else:
-            # default to grey over land
-            ax.set_facecolor('0.75')
+        ax.set_facecolor(facecolor)
     else:
-        if whitebg:
-            facecolor='1'
-        else:
-            # default to grey over land
-            facecolor='0.75'
         if no_coast:
             ax.set_facecolor(facecolor)
         elif empty_coast:
@@ -960,8 +954,6 @@ if __name__=="__main__":
                     help="arrow parameters : subsampling, scale, colour")
     parser.add_argument("-u", "--units", action="store",dest="units",default=None,
                     help="units (label for colour bar)")
-    parser.add_argument("-w", "--whitebg", action="store_true",dest="whitebg",
-                    help="White background for plots. Don't apply stock image of land/ocean topography.")
     parser.add_argument("-T", "--text", action="store",dest="text",nargs='+',
                     help="text to add to plot - multiples of 3 arguments: x, y, s as for matplotlib text")
     parser.add_argument("--Bgrid", action="store_true",dest="Bgrid",
@@ -974,6 +966,8 @@ if __name__=="__main__":
                     help="Don't draw coastline.")
     parser.add_argument("--empty_coast", action="store_true",dest="empty_coast",
                     help="Draw coastline but don't fill interior.")
+    parser.add_argument("--facecolor", action="store",dest="facecolor",default=None,
+                    help="facecolor (default = 0.75 - grey)")
     parser.add_argument("--figx", action="store",dest="figx",default=None,
                     help="x-dimension of figure (in inches I think)")
     parser.add_argument("--figy", action="store",dest="figy",default=None,
@@ -990,8 +984,8 @@ if __name__=="__main__":
               title=args.title,glob=args.glob,west=args.west,east=args.east,south=args.south,north=args.north,proj=args.proj,
               maskfile=args.maskfile,outfile=args.outfile,bottom=args.bottom,scientific=args.scientific,
               reverse_colors=args.reverse_colors,logscale=args.logscale,factor=args.factor,zeromean=args.zeromean,
-              plot_types=args.plot_types,arrows=args.arrows,whitebg=args.whitebg,vertbar=args.vertbar,
-              colors=args.colors,cmap=args.cmap,noshow=args.noshow,units=args.units,nobar=args.nobar,fontsizes=args.fontsizes,
+              plot_types=args.plot_types,arrows=args.arrows,vertbar=args.vertbar,colors=args.colors,cmap=args.cmap,
+              noshow=args.noshow,units=args.units,nobar=args.nobar,fontsizes=args.fontsizes,facecolor=args.facecolor,
               figx=args.figx,figy=args.figy,no_coast=args.no_coast,empty_coast=args.empty_coast,Bgrid=args.Bgrid,
               draw_points=args.draw_points,draw_fmt=args.draw_fmt,no_reproj=args.no_reproj,text=args.text)        
     
