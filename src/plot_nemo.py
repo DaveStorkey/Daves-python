@@ -202,7 +202,7 @@ def guess_bounds(x,y):
 def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,mxfld=None,title=None,rec=0,level=1,bottom=False,
               scientific=False,cmap=None,colors=None,reverse_colors=False,glob=None,west=None,east=None,south=None,north=None,
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
-              facecolor=False,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,no_coast=None,
+              facecolor=None,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,no_coast=None,
               empty_coast=None,draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None,Bgrid=False,no_reproj=False,
               text=None):
 
