@@ -503,6 +503,14 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
 
     print('region : ',region)
 
+    # Apply factor if required:
+    # Important to do this before the masking step below. 
+
+    if factor is not None:
+        for fldslice_i,factor_i in zip(fldslice,factor):
+            if factor_i is not None:
+                fldslice_i.data = factor_i * fldslice_i.data
+
     # Mask out or cut out bits of the field(s) to be contoured outwith the area being plotted 
     # so that the automatic min/max calculation works. Also so that the zero mean calculation is restricted to
     # the plotted area. Also so we can calculate the maximum vector length for the key arrow.
@@ -539,13 +547,6 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         fldslice[:] = fldslice_cutout[:]
 
     print('min/max fldslice[0] : ',fldslice[0].data.min(),fldslice[0].data.max())
-
-    # Apply factor if required:
-
-    if factor is not None:
-        for fldslice_i,factor_i in zip(fldslice,factor):
-            if factor_i is not None:
-                fldslice_i.data = factor_i * fldslice_i.data
 
     # Zero out the spatial mean over the displayed area if required:
 
