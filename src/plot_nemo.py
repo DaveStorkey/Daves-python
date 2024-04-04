@@ -646,6 +646,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                 if reverse_colors:
                     cmap = mcolors.ListedColormap(cmap(np.arange(255,-1,-1)))
 
+
         print('colors : ',colors)
         print('cmap : ',cmap)
         print('len(levs) : ',len(levs))
@@ -727,7 +728,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             # no projection
             for fldslice_i, plot_type in zip(fldslice[:nscalar],plot_types[:nscalar]):
                 print('fldslice_i.shape : ',fldslice_i.shape)
-                fldproj.append(fldslice_i)
+                fldproj.append(fldslice_i.data)
                 x.append(fldslice_i.coord('longitude').points)
                 y.append(fldslice_i.coord('latitude').points)
                 if 'b' in plot_type:
