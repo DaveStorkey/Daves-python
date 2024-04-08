@@ -856,7 +856,10 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             plot_x = [draw_points[ii],draw_points[ii+2]]
             plot_y = [draw_points[ii+1],draw_points[ii+3]]
             print("Plotting : ",plot_x,plot_y," on projection ",p[0])
-            ax.plot(plot_x[:],plot_y[:],fmt,linewidth=linewidth,transform=ccrs.PlateCarree())
+            if p[0] is None:
+                ax.plot(plot_x[:],plot_y[:],fmt,linewidth=linewidth)
+            else:
+                ax.plot(plot_x[:],plot_y[:],fmt,linewidth=linewidth,transform=ccrs.PlateCarree())
             
     # Text
     if text is not None:
