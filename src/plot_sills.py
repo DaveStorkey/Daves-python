@@ -16,7 +16,7 @@ import distutils
 import xarray as xr
 import numpy as np
 import plot_nemo as pn
-from cutout_GEBCO import cutout_GEBCO
+from cutout_domain import cutout_domain
 
 def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=False):
 
@@ -94,7 +94,7 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
             print("precut : ",precut)
             print("")
             if precut:
-                cutout_GEBCO(infile=filename,invar=var,outfile=filestem+"_"+compressed_name+".nc",
+                cutout_domain(infile=filename,invar=var,outfile=filestem+"_"+compressed_name+".nc",
                              south=south,north=north,west=west,east=east)
                 filename=filestem+"_"+compressed_name+".nc"
                 south = None
