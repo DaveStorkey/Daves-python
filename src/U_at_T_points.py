@@ -41,7 +41,7 @@ def U_at_T_points(ucube,vcube):
     ulons = ucube.coord('longitude').points
     vlats = vcube.coord('latitude').points
 
-    if ucube.data.mask:
+    if True in ucube.data.mask:
         # derive a mask on the T points
         mask_U = ucube.data.mask.copy()
         mask_U_m1 = np.roll(mask_U,1,axis=-1)
@@ -58,7 +58,7 @@ def U_at_T_points(ucube,vcube):
     ulons_m1 = np.roll(ulons, 1,axis=-1)
     ucubeT = ucube.copy()
     ucubeT.data = 0.5 * ( ucube.data + u_m1 )
-    if ucube.data.mask:
+    if True in ucube.data.mask:
         ucubeT.data.mask = mask_T
 
     # Average V field (and latitudes) in the y-direction.
@@ -66,7 +66,7 @@ def U_at_T_points(ucube,vcube):
     vlats_m1 = np.roll(vlats, 1,axis=-2)
     vcubeT = vcube.copy()
     vcubeT.data = 0.5 * ( vcube.data + v_m1 )
-    if ucube.data.mask:
+    if True in ucube.data.mask:
         vcubeT.data.mask = mask_T
 
     # Set approximate lat/lon coordinates.
