@@ -207,16 +207,16 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
               text=None):
 
     # short cuts
-    projections = { 'none'          : ( None               , 'global' ),
-                    'pc0'           : ( ccrs.PlateCarree() , 'global' ),
-                    'pc180'         : ( ccrs.PlateCarree(central_longitude=180.0), 'global' ), 
-                    'merc'          : ( ccrs.Mercator(min_latitude=-86.0), 'global' ), 
-                    'northps'       : ( ccrs.NorthPolarStereo(), [0,359.9,50,90] ), 
-#                    'northps'       : ( ccrs.NorthPolarStereo(), [0,359.9,60,90] ), 
-                    'southps_large' : ( ccrs.SouthPolarStereo(), [0,359.9,-90,-35] ), 
-                    'southps'       : ( ccrs.SouthPolarStereo(), [0,359.9,-90,-45] ), 
-                    'southps_zoom'  : ( ccrs.SouthPolarStereo(), [0,359.9,-90,-60] ),
-                    'south_stereo'  : ( ccrs.Stereographic(central_latitude=-90.0, central_longitude=0.0),[0,359,-90,-60] )
+    projections = { 'none'          : ( None               , (0.0,359.99,-90.0,90.0) ),
+                    'pc0'           : ( ccrs.PlateCarree() , (0.0,359.99,-90.0,90.0) ),
+                    'pc180'         : ( ccrs.PlateCarree(central_longitude=180.0), (0.0,359.99,-90.0,90.0) ), 
+                    'merc'          : ( ccrs.Mercator(min_latitude=-86.0), (0.0,359.99,-90.0,90.0) ), 
+                    'northps'       : ( ccrs.NorthPolarStereo(), (0,359.9,50,90) ), 
+#                    'northps'       : ( ccrs.NorthPolarStereo(), (0,359.9,60,90) ), 
+                    'southps_large' : ( ccrs.SouthPolarStereo(), (0,359.9,-90,-35) ), 
+                    'southps'       : ( ccrs.SouthPolarStereo(), (0,359.9,-90,-45) ), 
+                    'southps_zoom'  : ( ccrs.SouthPolarStereo(), (0,359.9,-90,-60) ),
+                    'south_stereo'  : ( ccrs.Stereographic(central_latitude=-90.0, central_longitude=0.0),(0,359,-90,-60) )
     }   
 
     if proj is None:
@@ -463,44 +463,47 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         lons.append(get_coord(fldslice_i,'longitude',filenames_to_read_i))
         lats.append(get_coord(fldslice_i,'latitude',filenames_to_read_i))
 
-    # restrict longitudes to the range [0,360] 
-    for lons_i in lons:
-        lons_i[:] = np.remainder(lons_i[:],360.0)
-    if west is not None:
-        west = west%360.0
-    if east is not None:
-        east = east%360.0
-
-    # if we have chosen west and east limits such that the area crosses the
-    # zero meridion we'll have to change to use [-180,180]
-    if west is not None and east is not None and west > east:
-        for lons_i in lons:
-            select_mask = np.where(lons_i[:] > 180.0,1,0)
-            lons_i[:] = lons_i[:] - 360.0*select_mask
-        if west > 180.0:
-            west=west-360.0
-        if east > 180.0:
-            east=east-360.0
-        print('min/max lons_i after normalisation: ',lons_i.min(),lons_i.max())
-
-    if p[1] == 'global':
-        (west_default,east_default,south_default,north_default) = (0.0,359.99,-90.0,90.0)
-    else:
-        (west_default,east_default,south_default,north_default) = p[1]
-
     if glob:
-        region = p[1]
+        (west,east,south,north) = p[1]
     else:
         if west is None:
-            west = max(west_default,min(lons_i.min() for lons_i in lons))
+            west = min(np.min(lons_i) for lons_i in lons)
         if east is None:
-            east = min(east_default,max(lons_i.max() for lons_i in lons))
+            east = max(np.max(lons_i) for lons_i in lons)
         if south is None:
-            south = max(south_default,min(lats_i.min() for lats_i in lats))
+            south = min(np.min(lats_i) for lats_i in lats)
         if north is None:
-            north = min(north_default,max(lats_i.max() for lats_i in lats))
-        region = [west,east,south,north]
+            north = max(np.max(lats_i) for lats_i in lats)
 
+    # Restrict west and east to the range [-360.360]
+    # and make sure that east > west within this range.
+    west = west%360.0
+    east = east%360.0
+    if east < west:
+        if west < 0.0:
+            east+=360.0
+        else:
+            west-=360.0
+
+    # restrict longitudes to the range [-180,180]...
+    for lons_i in lons:
+        lons_i[:] = lons_i[:] - np.maximum(0.0,np.sign(lons_i[:]-180.0))*360.0
+        lons_i[:] = lons_i[:] + np.maximum(0.0,np.sign(-lons_i[:]-180.0))*360.0
+    # ... unless the chosen area straddles the 180 deg meridion.
+    if west < -180.0 and east > -180.0:
+        shift_lon = -180.0
+    elif west < 180.0 and east > 180.0:
+        shift_lon =  180.0
+    else:
+        shift_lon = 0.0
+        # shift "east" and "west" into the [-180,+180] range in this case:
+        # (implicit conversions between lists and numpy arrays here)
+        [west,east] = [west,east] - np.maximum(0.0,np.sign([ west-180.0, east-180.0]))*360.0
+        [west,east] = [west,east] + np.maximum(0.0,np.sign([-west-180.0,-east-180.0]))*360.0
+    for lons_i in lons:
+        lons_i[:]+=shift_lon
+
+    region = [west,east,south,north]
     print('region : ',region)
 
     # Apply factor if required:
@@ -730,6 +733,10 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                 print('fldslice_i.shape : ',fldslice_i.shape)
                 fldproj.append(fldslice_i.data)
                 x.append(fldslice_i.coord('longitude').points)
+                # get longitudes in the correct range
+                x[-1] = x[-1] - np.maximum(0.0,np.sign( x[-1]-180.0))*360.0
+                x[-1] = x[-1] + np.maximum(0.0,np.sign(-x[-1]-180.0))*360.0
+                x[-1] += shift_lon
                 y.append(fldslice_i.coord('latitude').points)
                 if 'b' in plot_type:
                     xbounds_i,ybounds_i = guess_bounds(x[-1],y[-1])
@@ -845,6 +852,11 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     if draw_points is not None:
         if len(draw_points)%4 != 0:
             raise Exception("Error: number of draw_points (-d) must be a multiple of 4: start_x,start_y,end_x,end_y")
+        # fix longitudes to be in the range [-180,180]:
+        draw_points[0::2] = [lon - np.maximum(0.0,np.sign( lon-180.0))*360.0 for lon in draw_points[0::2]]
+        draw_points[0::2] = [lon + np.maximum(0.0,np.sign(-lon-180.0))*360.0 for lon in draw_points[0::2]]
+        draw_points[0::2] = [lon + shift_lon for lon in draw_points[0::2]]
+        #
         fmt = "k-"  # default to black solid lines        
         linewidth = 2
         if draw_fmt is not None:
