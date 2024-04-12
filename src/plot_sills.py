@@ -12,13 +12,70 @@ Read in details of each location from a simple database.
 '''
 
 import os
+import datetime
 import distutils
 import xarray as xr
 import numpy as np
 import plot_nemo as pn
 from cutout_domain import cutout_domain
 
-def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=False):
+def html_pieces():
+    # Define html templates for the output web page
+
+    html_head = """
+<!DOCTYPE doctype PUBLIC "-//w3c//dtd html 4.0 transitional//en"><html><head>
+   <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+   <title>Sills of the Global Ocean</title>
+   <meta name="author" content="Dave Storkey"></head>
+<style type="text/css">
+table.gridtable {
+	border-width: 2px;
+	border-color: black;
+	border-style: solid;
+}
+table.gridtable th {
+	border-width: 2px;
+	border-color: black;
+	border-style: solid;
+        text-style: bold;
+        text-align: center;
+        font-size: 1.9em;
+}
+table.gridtable td {
+	border-width: 2px;
+	border-color: black;
+	border-style: solid;
+        text-align: left;
+}
+</style>
+   <body text="#000000" bgcolor="#ffffff" link="#cc0000" vlink="#663300" alink="#ff0000">
+   <font size=2>
+<hr>
+<center>
+<h1>
+<font color="#000000">Sills of the Global Ocean</font></h1>
+</center>
+<hr>
+
+<center><table BORDER=1 COLS=NCOLS WIDTH="90%" style="font-size:90%" NOSAVE >
+    """
+
+    html_tail = """
+</table>
+</center>
+
+<hr width="100%">
+<font color="#000000">Dave Storkey, <a href="mailto:dave.storkey@metoffice.gov.uk">dave.storkey@metoffice.gov.uk</a></font>
+<br><font color="#000000">Created: DATE_TEXT</font>
+<br>&nbsp;
+</body></html>
+    """
+
+    return html_head, html_tail
+
+
+def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=False,
+               proj=None):
 
     if database is None:
         raise Exception("Error: must specify database file.")
@@ -49,16 +106,33 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
     if len(cutout) == 1 and len(filenames) > 1:
         cutout=len(filenames)*cutout
 
+    if proj is None:
+        proj=False
+    if not isinstance(proj,list):
+        proj=[proj]
+    if len(proj) == 1 and len(filenames) > 1:
+        proj=len(filenames)*proj
+
     # parse database
     s=[]
+    section_text=""
+    section_dir="."
     try:
         with open(database) as db:
             for cline in db:
+                if "====" in cline:
+                    # new section
+                    section_text=cline[2:].replace("====","").strip()
+                    section_dir=section_text.replace(" ","")
+                    if not os.path.isdir(section_dir):
+                        os.makedirs(section_dir)
                 if cline[0]=="#" or "|" not in cline:
                     # allow comments in database
                     continue
                 att=cline.split('|')
                 s.append({})
+                s[-1]["section text"] = section_text
+                s[-1]["section dir"] = section_dir
                 s[-1]["name"] = att[0].strip()
                 s[-1]["depth"] = float(att[1].strip())
                 s[-1]["width"] = att[2].strip()
@@ -70,7 +144,7 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
 
     print(len(s)," entries found in database "+database)
 
-    # loop over entries in database and plot 
+    # loop over entries in database and bathymetry files and plot 
     for sill in s:
         print("")
         print("Plotting "+sill["name"])
@@ -80,7 +154,7 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
         depmax = sill["depth"]*2.0
         compressed_name = sill["name"].replace(" ","")
 
-        for filename,var,title,precut in zip(filenames,vars,titles,cutout):
+        for filename,var,title,precut,prj in zip(filenames,vars,titles,cutout,proj):
             filestem=filename.replace(".nc","")
 
             south = sill["lat"]-2.5
@@ -102,19 +176,45 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                 west  = None
                 east  = None
 
+            outfile = os.path.join(sill["section dir"],title+"_"+compressed_name+".png")
             (cslines, cscolor, csarrows) = pn.plot_nemo(filenames=filename,sca_names=var,
-                                           plot_types="b",cmap="tab20b_r",
+                                           plot_types="b",cmap="tab20b_r",proj=prj,
                                            mnfld=0.0,mxfld=depmax,west=west,east=east, 
                                            south=south,north=north,vertbar=True,nlevs=21,
-                                           outfile=filestem+"_"+compressed_name+".png",
-                                           title=title+": "+sill["name"],facecolor="white",
-                                           draw_points=draw_points)
+                                           outfile=outfile,title=title+": "+sill["name"],
+                                           facecolor="white",draw_points=draw_points)
 
         if precut:
             try:
                 os.remove(filename)
             except FileNotFoundError:
                 pass
+
+    # Create web page
+
+    html_head, html_tail = html_pieces()
+    html_head = html_head.replace("NCOLS",str(len(s)).strip())
+    html_tail = html_tail.replace("DATE_TEXT","{:%d %b %Y %H:%M}".format(datetime.datetime.now()))
+
+    if os.path.exists("ocean_sills.html"):
+        os.rename("ocean_sills.html","ocean_sills_OLD.html")
+    with open("ocean_sills.html","x") as webfile:
+        webfile.write(html_head)
+        section_text=""
+        for sill in s:
+            if sill["section text"] != section_text:
+                if len(section_text) > 0:
+                    webfile.write("</table>")
+                section_text=sill["section text"]
+                webfile.write("<hr><center><h2>"+section_text+"</h2></center><hr>")
+            webfile.write("<tr>\n")
+            webfile.write("<th>"+sill["name"]+"</th>\n")
+            for title in titles:
+                imagefile=os.path.join(sill["section dir"],title+"_"+sill["name"].replace(" ","")+".png")
+                webfile.write("<td><center><a href="+imagefile+"><img src="+imagefile+" alt='blah' height='350'></a></center></td>\n")
+            webfile.write("</tr>\n")
+        webfile.write(html_tail)
+
 
 if __name__=="__main__":
     import argparse
@@ -130,7 +230,9 @@ if __name__=="__main__":
     parser.add_argument("-C", "--cutout", action="store",dest="cutout",nargs="+",
         type=lambda x:bool(distutils.util.strtobool(x)),
         help="if True cutout the data prior to plotting (for large data sets)")
+    parser.add_argument("-P", "--proj", action="store",dest="proj",nargs="+",
+        help="projection (default PlateCarree")
     args = parser.parse_args()
  
     plot_sills(database=args.database,filenames=args.filenames,vars=args.vars,
-               titles=args.titles,cutout=args.cutout)
+               titles=args.titles,cutout=args.cutout,proj=args.proj)
