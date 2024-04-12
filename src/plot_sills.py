@@ -73,6 +73,32 @@ table.gridtable td {
 
     return html_head, html_tail
 
+def lonlat_to_float(string_in):
+
+    try:
+        # allow for the case where the input is already a float
+        float_out = float(string_in)
+    except ValueError:
+        strings=string_in.split()
+        if len(strings) == 2:
+            # degrees
+            float_out=float(strings[0])
+        elif len(strings) == 3:
+            # degrees and arcminutes
+            float_out=float(strings[0])+float(strings[1])/60.0
+        elif len(strings) == 4:
+            # degrees, arcminutes and arcseconds
+            float_out=float(strings[0])+float(strings[1])/60.0+float(strings[1])/3600.0
+        else:
+            raise Exception("Error: could not interpret "+string_in+" as a latitude or longitude.")
+        if strings[-1] == "N" or strings[-1] == "E":
+            pass
+        elif strings[-1] == "S" or strings[-1] == "W":
+            float_out = -float_out
+        else:
+            raise Exception("Error: could not interpret "+string_in+" as a latitude or longitude.")
+
+    return float_out 
 
 def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=False,
                proj=None):
@@ -136,8 +162,8 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                 s[-1]["name"] = att[0].strip()
                 s[-1]["depth"] = float(att[1].strip())
                 s[-1]["width"] = att[2].strip()
-                s[-1]["lat"] = float(att[3].strip())
-                s[-1]["lon"] = float(att[4].strip())
+                s[-1]["lat"] = lonlat_to_float(att[3].strip())
+                s[-1]["lon"] = lonlat_to_float(att[4].strip())
                 s[-1]["ref"] = att[5].strip()
     except FileNotFoundError:
         raise Exception("Error: file "+database+" not found.")
