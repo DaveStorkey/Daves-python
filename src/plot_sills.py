@@ -57,7 +57,6 @@ table.gridtable td {
 </center>
 <hr>
 
-<center><table BORDER=1 COLS=NCOLS WIDTH="90%" style="font-size:90%" NOSAVE >
     """
 
     html_tail = """
@@ -222,8 +221,8 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
     print("Creating web page.")
     print("")
     html_head, html_tail = html_pieces()
-    html_head = html_head.replace("NCOLS",str(len(s)).strip())
     html_tail = html_tail.replace("DATE_TEXT","{:%d %b %Y %H:%M}".format(datetime.datetime.now()))
+    ncols=str(len(s)).strip()
 
     if os.path.exists("ocean_sills.html"):
         os.rename("ocean_sills.html","ocean_sills_OLD.html")
@@ -236,6 +235,7 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                     webfile.write("</table>")
                 section_text=sill["section text"]
                 webfile.write("<hr><center><h2>"+section_text+"</h2></center><hr>")
+                webfile.write("<center><table BORDER=1 COLS='"+ncols+"' WIDTH='90%' style='font-size:90%' NOSAVE >")
             webfile.write("<tr>\n")
             webfile.write("<th>"+sill["name"]+"</th>\n")
             for title in titles:
