@@ -76,7 +76,7 @@ table.gridtable td {
 def lonlat_to_float(string_in):
 
     try:
-        # allow for the case where the input is already a float
+        # allow for the case where the input is already interpretable as a float
         float_out = float(string_in)
     except ValueError:
         strings=string_in.split()
@@ -101,7 +101,7 @@ def lonlat_to_float(string_in):
     return float_out 
 
 def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=False,
-               proj=None):
+               proj=None, clobber=False):
 
     if database is None:
         raise Exception("Error: must specify database file.")
@@ -182,33 +182,34 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
 
         for filename,var,title,precut,prj in zip(filenames,vars,titles,cutout,proj):
             filestem=filename.replace(".nc","")
-
-            south = sill["lat"]-2.5
-            north = sill["lat"]+2.5
-            west = sill["lon"]-2.5
-            east = sill["lon"]+2.5
-            if filename == filenames[0]:
-                print("south, north, west, east : ",south,north,west,east)
-
-            print("")
-            print("precut : ",precut)
-            print("")
-            if precut:
-                cutout_domain(infile=filename,invar=var,outfile=filestem+"_"+compressed_name+".nc",
-                             south=south,north=north,west=west,east=east)
-                filename=filestem+"_"+compressed_name+".nc"
-                south = None
-                north = None
-                west  = None
-                east  = None
-
             outfile = os.path.join(sill["section dir"],title+"_"+compressed_name+".png")
-            (cslines, cscolor, csarrows) = pn.plot_nemo(filenames=filename,sca_names=var,
-                                           plot_types="b",cmap="tab20b_r",proj=prj,
-                                           mnfld=0.0,mxfld=depmax,west=west,east=east, 
-                                           south=south,north=north,vertbar=True,nlevs=21,
-                                           outfile=outfile,title=title+": "+sill["name"],
-                                           facecolor="white",draw_points=draw_points)
+
+            if not clobber and not os.path.exists(outfile):
+                south = sill["lat"]-2.5
+                north = sill["lat"]+2.5
+                west = sill["lon"]-2.5
+                east = sill["lon"]+2.5
+                if filename == filenames[0]:
+                    print("south, north, west, east : ",south,north,west,east)
+
+                print("")
+                print("precut : ",precut)
+                print("")
+                if precut:
+                    cutout_domain(infile=filename,invar=var,outfile=filestem+"_"+compressed_name+".nc",
+                                 south=south,north=north,west=west,east=east)
+                    filename=filestem+"_"+compressed_name+".nc"
+                    south = None
+                    north = None
+                    west  = None
+                    east  = None
+
+                (cslines, cscolor, csarrows) = pn.plot_nemo(filenames=filename,sca_names=var,
+                                               plot_types="b",cmap="tab20b_r",proj=prj,
+                                               mnfld=0.0,mxfld=depmax,west=west,east=east, 
+                                               south=south,north=north,vertbar=True,nlevs=21,
+                                               outfile=outfile,title=title+": "+sill["name"],
+                                               facecolor="white",draw_points=draw_points)
 
         if precut:
             try:
@@ -217,7 +218,9 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                 pass
 
     # Create web page
-
+    print("")
+    print("Creating web page.")
+    print("")
     html_head, html_tail = html_pieces()
     html_head = html_head.replace("NCOLS",str(len(s)).strip())
     html_tail = html_tail.replace("DATE_TEXT","{:%d %b %Y %H:%M}".format(datetime.datetime.now()))
@@ -258,7 +261,9 @@ if __name__=="__main__":
         help="if True cutout the data prior to plotting (for large data sets)")
     parser.add_argument("-P", "--proj", action="store",dest="proj",nargs="+",
         help="projection (default PlateCarree")
+    parser.add_argument("-X", "--clobber", action="store_true",dest="clobber",
+        help="if true, overwrite existing plots (default false)")
     args = parser.parse_args()
  
     plot_sills(database=args.database,filenames=args.filenames,vars=args.vars,
-               titles=args.titles,cutout=args.cutout,proj=args.proj)
+               titles=args.titles,cutout=args.cutout,proj=args.proj,clobber=args.clobber)
