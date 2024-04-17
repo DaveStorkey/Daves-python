@@ -207,16 +207,16 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
               text=None):
 
     # short cuts
-    projections = { 'none'          : ( None               , (0.0,359.99,-90.0,90.0) ),
-                    'pc0'           : ( ccrs.PlateCarree() , (0.0,359.99,-90.0,90.0) ),
-                    'pc180'         : ( ccrs.PlateCarree(central_longitude=180.0), (0.0,359.99,-90.0,90.0) ), 
-                    'merc'          : ( ccrs.Mercator(min_latitude=-86.0), (0.0,359.99,-90.0,90.0) ), 
-                    'northps'       : ( ccrs.NorthPolarStereo(), (0,359.9,50,90) ), 
-#                    'northps'       : ( ccrs.NorthPolarStereo(), (0,359.9,60,90) ), 
-                    'southps_large' : ( ccrs.SouthPolarStereo(), (0,359.9,-90,-35) ), 
-                    'southps'       : ( ccrs.SouthPolarStereo(), (0,359.9,-90,-45) ), 
-                    'southps_zoom'  : ( ccrs.SouthPolarStereo(), (0,359.9,-90,-60) ),
-                    'south_stereo'  : ( ccrs.Stereographic(central_latitude=-90.0, central_longitude=0.0),(0,359,-90,-60) )
+    projections = { 'none'          : ( None               , ('glob','glob','glob','glob') ),
+                    'pc0'           : ( ccrs.PlateCarree() , ('glob','glob','glob','glob') ),
+                    'pc180'         : ( ccrs.PlateCarree(central_longitude=180.0), ('glob','glob','glob','glob') ), 
+                    'merc'          : ( ccrs.Mercator(min_latitude=-86.0), ('glob','glob','glob','glob') ), 
+                    'northps'       : ( ccrs.NorthPolarStereo(), ('glob','glob',50,'glob') ), 
+                    #                    'northps'       : ( ccrs.NorthPolarStereo(), ('glob','glob',60,'glob') ), 
+                    'southps_large' : ( ccrs.SouthPolarStereo(), ('glob','glob','glob',-35) ), 
+                    'southps'       : ( ccrs.SouthPolarStereo(), ('glob','glob','glob',-45) ), 
+                    'southps_zoom'  : ( ccrs.SouthPolarStereo(), ('glob','glob','glob',-60) ), 
+                    'south_stereo'  : ( ccrs.Stereographic(central_latitude=-90.0, central_longitude=0.0),('glob','glob','glob',-60) )
     }   
 
     if proj is None:
@@ -473,49 +473,68 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     if north is None:
         north = north_default
 
-    # Restrict west and east to the range [-360,360]
-    # and make sure that east > west within this range.
-    west = west%360.0
-    east = east%360.0
-    if east < west:
-        if west < 0.0:
-            east+=360.0
+    # If we have a global plot area and (some) global input data then set glob_display=True
+    glob_region = False
+    if west == 'glob' and east == 'glob' and south == 'glob' and north == 'glob':
+        # glob_region = True means we don't have to do any masking or cutting out later
+        glob_region = True
+        for lons_i,lats_i in zip(lons,lats):
+            lons_shift = lons_i[:] - np.maximum(0.0,np.sign(lons_i[:]-180.0))*360.0
+            if np.max(lons_i[:])     - np.min(lons_i[:])     > 355.0 and \
+               np.max(lons_shift[:]) - np.min(lons_shift[:]) > 355.0 and \
+               np.max(lats_i[:])     - np.min(lats_i[:])     > 160.0:
+                glob_display = True
+
+    lon_range = 0  # means "unset"
+    if west != 'glob' and east != 'glob':
+        # Restrict west and east to the range [-360,360]
+        # and make sure that east > west within this range.
+        west = west%360.0
+        east = east%360.0
+        if east < west:
+            if west < 0.0:
+                east+=360.0
+            else:
+                west-=360.0
+        # Fix longitudes to appropriate range depending on the values of [west,east]
+        if west < -180.0:
+            # use range [-360,0]
+            lon_range = 1
+            for lons_i in lons:
+                lons_i[:] = lons_i[:] - np.maximum(0.0,np.sign(lons_i[:]))*360.0
+        elif east > 180.0:
+            # use range [0,360]
+            lon_range = 2
+            for lons_i in lons:
+                lons_i[:] = lons_i[:] - np.minimum(0.0,np.sign(lons_i[:]))*360.0
         else:
-            west-=360.0
+            # use range [-180,+180]
+            lon_range = 3
+            for lons_i in lons:
+                lons_i[:] = lons_i[:] - np.maximum(0.0,np.sign(lons_i[:]-180.0))*360.0
+                lons_i[:] = lons_i[:] - np.minimum(0.0,np.sign(lons_i[:]+180.0))*360.0
 
-    # Fix longitudes to appropriate range depending on the values of [west,east]
-    if west < -180.0:
-        # use range [-360,0]
-        lon_range = 1
-        for lons_i in lons:
-            lons_i[:] = lons_i[:] - np.maximum(0.0,np.sign(lons_i[:]))*360.0
-    elif east > 180.0:
-        # use range [0,360]
-        lon_range = 2
-        for lons_i in lons:
-            lons_i[:] = lons_i[:] - np.minimum(0.0,np.sign(lons_i[:]))*360.0
+    # Set each of west, east, south, north to be the most restrictive
+    # value of itself and the min/max lon/lat value in the data. This
+    # ensures that regional data isn't displayed on a global area
+    # unless glob_display keyword is set.
+    if west == 'glob':
+        west = min(np.min(lons_i) for lons_i in lons)
     else:
-        # use range [-180,+180]
-        lon_range = 3
-        for lons_i in lons:
-            lons_i[:] = lons_i[:] - np.maximum(0.0,np.sign(lons_i[:]-180.0))*360.0
-            lons_i[:] = lons_i[:] - np.minimum(0.0,np.sign(lons_i[:]+180.0))*360.0
-
-    # glob_display keyword forces the plot area to be the 
-    # default area for the chosen projection regardless of
-    # the geographical extent of the data.
-    if glob_display:
-        region = p[1]
-    else:
-        # Set each of west, east, south, north to be the most restrictive
-        # value of itself and the min/max lon/lat value in the data. This
-        # ensures that regional data isn't displayed on a global area
-        # unless glob_display keyword is set.
         west = max(west,min(np.min(lons_i) for lons_i in lons))
+    if east == 'glob':
+        east = max(np.max(lons_i) for lons_i in lons)
+    else:
         east = min(east,max(np.max(lons_i) for lons_i in lons))
+    if south == 'glob':
+        south = min(np.min(lats_i) for lats_i in lats)
+    else:
         south = max(south,min(np.min(lats_i) for lats_i in lats))
+    if north == 'glob':
+        north = max(np.max(lats_i) for lats_i in lats)
+    else:
         north = min(north,max(np.max(lats_i) for lats_i in lats))
-        region = [west,east,south,north]
+    region = [west,east,south,north]
     print('region : ',region)
 
     # Apply factor if required:
@@ -526,39 +545,39 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             if factor_i is not None:
                 fldslice_i.data = factor_i * fldslice_i.data
 
-    # Mask out or cut out bits of the field(s) to be contoured outwith the area being plotted 
-    # so that the automatic min/max calculation works. Also so that the zero mean calculation is restricted to
-    # the plotted area. Also so we can calculate the maximum vector length for the key arrow.
+    if not glob_region:
+        # Mask out or cut out bits of the field(s) to be contoured outwith the area being plotted 
+        # so that the automatic min/max calculation works. Also so that the zero mean calculation is restricted to
+        # the plotted area. Also so we can calculate the maximum vector length for the key arrow.
+        fldslice_cutout=[]
+        mask_keep=[]
+        for lons_i, lats_i, fldslice_i in zip(lons[:],lats[:],fldslice[:]): 
+            # ma.masked_where creates a copy of the input array by default. If you set the output
+            # array as the same array as the input array this seems to cause problems. So create a
+            # new array and copy the data back into the original array ( = data array of the cube).
+            masked_data = ma.masked_where( ((lons_i < region[0]) | (lons_i > region[1])) , fldslice_i.data )
+            masked_data = ma.masked_where( ((lats_i < region[2]) | (lats_i > region[3])) , fldslice_i.data )
+            # keep the original mask to reapply before plotting for polar stereographic plots 
+            # (to avoid the "circle in a square" effect). 
+            mask_keep.append(fldslice_i.data.mask)
+            fldslice_i.data = masked_data
+            if proj == 'none':
+                # Cut out the field for proj='none' because ax.set_extent doesn't work with no projection.
+                # Note that here we can't just redefine fldslice_i as the cutout field because fldslice_i
+                # is only a view on the original array, which isn't modified in this case. Instead we have
+                # to create a new list of arrays fldslice_cutout and make the substition after the end of the loop.
+                ny,nx = fldslice_i.data.shape
+                ii = ma.arange(nx) * ma.ones((ny,nx))
+                jj = (ma.arange(ny) * ma.ones((nx,ny))).transpose()
+                ii = ma.masked_where( ((lons_i < region[0]) | (lons_i > region[1])) , ii ) 
+                ii = ma.masked_where( ((lats_i < region[2]) | (lats_i > region[3])) , ii ) 
+                jj = ma.masked_where( ((lons_i < region[0]) | (lons_i > region[1])) , jj ) 
+                jj = ma.masked_where( ((lats_i < region[2]) | (lats_i > region[3])) , jj ) 
+                fldslice_cutout.append(fldslice_i[int(jj.min()):int(jj.max())+1,int(ii.min()):int(ii.max()+1)])
+            else:
+                fldslice_cutout.append(fldslice_i)
 
-    fldslice_cutout=[]
-    mask_keep=[]
-    for lons_i, lats_i, fldslice_i in zip(lons[:],lats[:],fldslice[:]): 
-        # ma.masked_where creates a copy of the input array by default. If you set the output
-        # array as the same array as the input array this seems to cause problems. So create a
-        # new array and copy the data back into the original array ( = data array of the cube).
-        masked_data = ma.masked_where( ((lons_i < region[0]) | (lons_i > region[1])) , fldslice_i.data )
-        masked_data = ma.masked_where( ((lats_i < region[2]) | (lats_i > region[3])) , fldslice_i.data )
-        # keep the original mask to reapply before plotting for polar stereographic plots 
-        # (to avoid the "circle in a square" effect). 
-        mask_keep.append(fldslice_i.data.mask)
-        fldslice_i.data = masked_data
-        if proj == 'none':
-            # Cut out the field for proj='none' because ax.set_extent doesn't work with no projection.
-            # Note that here we can't just redefine fldslice_i as the cutout field because fldslice_i
-            # is only a view on the original array, which isn't modified in this case. Instead we have
-            # to create a new list of arrays fldslice_cutout and make the substition after the end of the loop.
-            ny,nx = fldslice_i.data.shape
-            ii = ma.arange(nx) * ma.ones((ny,nx))
-            jj = (ma.arange(ny) * ma.ones((nx,ny))).transpose()
-            ii = ma.masked_where( ((lons_i < region[0]) | (lons_i > region[1])) , ii ) 
-            ii = ma.masked_where( ((lats_i < region[2]) | (lats_i > region[3])) , ii ) 
-            jj = ma.masked_where( ((lons_i < region[0]) | (lons_i > region[1])) , jj ) 
-            jj = ma.masked_where( ((lats_i < region[2]) | (lats_i > region[3])) , jj ) 
-            fldslice_cutout.append(fldslice_i[int(jj.min()):int(jj.max())+1,int(ii.min()):int(ii.max()+1)])
-        else:
-            fldslice_cutout.append(fldslice_i)
-
-    fldslice[:] = fldslice_cutout[:]
+        fldslice[:] = fldslice_cutout[:]
 
     print('min/max fldslice[0] : ',fldslice[0].data.min(),fldslice[0].data.max())
 
@@ -705,11 +724,11 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             feature = ctpy.feature.NaturalEarthFeature('physical', 'coastline', '50m',facecolor=facecolor,edgecolor='k')
             ax.add_feature(feature,linewidth=0.5)
         # set the plot extent
-#        if region == 'global':
-#            ax.set_global()
-#        else:
-        ax.set_extent(region, crs=ccrs.PlateCarree())
-#        ax.set_extent(region, crs=ccrs.Geodetic())
+        if glob_display:
+            ax.set_global()
+        else:
+            ax.set_extent(region, crs=ccrs.PlateCarree())
+#            ax.set_extent(region, crs=ccrs.Geodetic())
 
         if p[0] == ccrs.PlateCarree() or p[0] == ccrs.PlateCarree(central_longitude=180.0):
             # Axis formatting - ONLY WORKS FOR PLATECARREE (or no projection)!!
