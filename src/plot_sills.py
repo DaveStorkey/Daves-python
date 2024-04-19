@@ -131,8 +131,6 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
     if len(cutout) == 1 and len(filenames) > 1:
         cutout=len(filenames)*cutout
 
-    if proj is None:
-        proj=False
     if not isinstance(proj,list):
         proj=[proj]
     if len(proj) == 1 and len(filenames) > 1:
