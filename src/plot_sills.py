@@ -174,14 +174,15 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
         print("")
         draw_points = [sill["lon"]-0.1,sill["lat"]-0.1,sill["lon"]+0.1,sill["lat"]+0.1,
                        sill["lon"]-0.1,sill["lat"]+0.1,sill["lon"]+0.1,sill["lat"]-0.1]
-        depmax = sill["depth"]*2.0
+        depmin = max(0.0   ,sill["depth"]-1000.0)
+        depmax = min(5500.0,sill["depth"]+1000.0)
         compressed_name = sill["name"].replace(" ","")
 
         for filename,var,title,precut,prj in zip(filenames,vars,titles,cutout,proj):
             filestem=filename.replace(".nc","")
             outfile = os.path.join(sill["section dir"],title+"_"+compressed_name+".png")
 
-            if not clobber and not os.path.exists(outfile):
+            if clobber or not os.path.exists(outfile):
                 south = sill["lat"]-2.5
                 north = sill["lat"]+2.5
                 west = sill["lon"]-2.5
@@ -203,7 +204,7 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
 
                 (cslines, cscolor, csarrows) = pn.plot_nemo(filenames=filename,sca_names=var,
                                                plot_types="b",cmap="tab20b_r",proj=prj,
-                                               mnfld=0.0,mxfld=depmax,west=west,east=east, 
+                                               mnfld=depmin,mxfld=depmax,west=west,east=east, 
                                                south=south,north=north,vertbar=True,nlevs=21,
                                                outfile=outfile,title=title+": "+sill["name"],
                                                facecolor="white",draw_points=draw_points)
