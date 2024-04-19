@@ -87,7 +87,7 @@ def lonlat_to_float(string_in):
             float_out=float(strings[0])+float(strings[1])/60.0
         elif len(strings) == 4:
             # degrees, arcminutes and arcseconds
-            float_out=float(strings[0])+float(strings[1])/60.0+float(strings[1])/3600.0
+            float_out=float(strings[0])+float(strings[1])/60.0+float(strings[2])/3600.0
         else:
             raise Exception("Error: could not interpret "+string_in+" as a latitude or longitude.")
         if strings[-1] == "N" or strings[-1] == "E":
@@ -210,11 +210,11 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                                                outfile=outfile,title=title+": "+sill["name"],
                                                facecolor="white",draw_points=draw_points)
 
-        if precut:
-            try:
-                os.remove(filename)
-            except FileNotFoundError:
-                pass
+#        if precut:
+#            try:
+#                os.remove(filename)
+#            except FileNotFoundError:
+#                pass
 
     # Create web page
     print("")
