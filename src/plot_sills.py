@@ -172,8 +172,10 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
         print("")
         print("Plotting "+sill["name"])
         print("")
-        draw_points = [sill["lon"]-0.1,sill["lat"]-0.1,sill["lon"]+0.1,sill["lat"]+0.1,
-                       sill["lon"]-0.1,sill["lat"]+0.1,sill["lon"]+0.1,sill["lat"]-0.1]
+        draw_points = [sill["lon"]-0.1,sill["lat"]-0.1,sill["lon"]-0.1,sill["lat"]+0.1,
+                       sill["lon"]-0.1,sill["lat"]+0.1,sill["lon"]+0.1,sill["lat"]+0.1,
+                       sill["lon"]+0.1,sill["lat"]+0.1,sill["lon"]+0.1,sill["lat"]-0.1,
+                       sill["lon"]+0.1,sill["lat"]-0.1,sill["lon"]-0.1,sill["lat"]-0.1]
         depmin = max(0.0   ,sill["depth"]-1000.0)
         depmax = min(5500.0,sill["depth"]+1000.0)
         compressed_name = sill["name"].replace(" ","")
