@@ -199,6 +199,27 @@ def guess_bounds(x,y):
 
     return xbounds,ybounds
 
+def fix_lonrange(lons=None,lon_range=None):
+
+    # Fix longitudes to appropriate range depending on the value of lon_range.
+    if lon_range == 0:
+        # lon_range unset: do nothing
+        pass
+    elif lon_range == 1:
+        # use range [-360,0]
+        lons[:] = lons[:] - np.maximum(0.0,np.sign(lons[:]))*360.0
+    elif lon_range == 2:
+        # use range [0,360]
+        lons[:] = lons[:] - np.minimum(0.0,np.sign(lons[:]))*360.0
+    elif lon_range == 3:
+        # use range [-180,+180]
+        lons[:] = lons[:] - np.maximum(0.0,np.sign(lons[:]-180.0))*360.0
+        lons[:] = lons[:] - np.minimum(0.0,np.sign(lons[:]+180.0))*360.0
+    else:
+        raise Exception("Error: unrecognised value of lon_range: ",lon_range)
+
+    return lons
+
 def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,mxfld=None,title=None,rec=0,level=1,bottom=False,
               scientific=False,cmap=None,colors=None,reverse_colors=False,glob_display=None,west=None,east=None,south=None,north=None,
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
@@ -485,34 +506,21 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                np.max(lats_i[:])     - np.min(lats_i[:])     > 160.0:
                 glob_display = True
 
-    lon_range = 0  # means "unset"
+    print("glob_display : ",glob_display)
+    print("glob_region : ",glob_region)
+
     if west != 'glob' and east != 'glob':
         # Restrict west and east to the range [-360,360]
         # and make sure that east > west within this range.
-        west = west%360.0
-        east = east%360.0
+        # NB. python modulus function (%) doesn't behave the
+        # same as mathematical modulus for negative numbers!
+        west = ((west*np.sign(west))%360.0)*np.sign(west)
+        east = ((east*np.sign(east))%360.0)*np.sign(east)
         if east < west:
             if west < 0.0:
                 east+=360.0
             else:
                 west-=360.0
-        # Fix longitudes to appropriate range depending on the values of [west,east]
-        if west < -180.0:
-            # use range [-360,0]
-            lon_range = 1
-            for lons_i in lons:
-                lons_i[:] = lons_i[:] - np.maximum(0.0,np.sign(lons_i[:]))*360.0
-        elif east > 180.0:
-            # use range [0,360]
-            lon_range = 2
-            for lons_i in lons:
-                lons_i[:] = lons_i[:] - np.minimum(0.0,np.sign(lons_i[:]))*360.0
-        else:
-            # use range [-180,+180]
-            lon_range = 3
-            for lons_i in lons:
-                lons_i[:] = lons_i[:] - np.maximum(0.0,np.sign(lons_i[:]-180.0))*360.0
-                lons_i[:] = lons_i[:] - np.minimum(0.0,np.sign(lons_i[:]+180.0))*360.0
 
     # Set each of west, east, south, north to be the most restrictive
     # value of itself and the min/max lon/lat value in the data. This
@@ -534,8 +542,23 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         north = max(np.max(lats_i) for lats_i in lats)
     else:
         north = min(north,max(np.max(lats_i) for lats_i in lats))
+
     region = [west,east,south,north]
     print('region : ',region)
+
+    # Fix longitudes to appropriate range depending on the values of [west,east]
+    if west < -180.0:
+        # use range [-360,0]
+        lon_range = 1
+    elif east > 180.0:
+        # use range [0,360]
+        lon_range = 2
+    else:
+        # use range [-180,+180]
+        lon_range = 3
+    print("lon_range: ",lon_range)
+    for lons_i in lons:
+        lons_i[:] = fix_lonrange(lons=lons_i[:], lon_range=lon_range)
 
     # Apply factor if required:
     # Important to do this before the masking step below. 
@@ -762,15 +785,9 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             for fldslice_i, plot_type in zip(fldslice[:nscalar],plot_types[:nscalar]):
                 print('fldslice_i.shape : ',fldslice_i.shape)
                 fldproj.append(fldslice_i.data)
-                x.append(fldslice_i.coord('longitude').points)
+                x.append(fldslice_i.coord('longitude').points.copy())
                 # get longitudes in the correct range
-                if lon_range == 1: 
-                    x[-1] = x[-1] - np.maximum(0.0,np.sign(x[-1]))*360.0
-                elif lon_range == 2: 
-                    x[-1] = x[-1] - np.minimum(0.0,np.sign(x[-1]))*360.0
-                if lon_range == 3: 
-                    x[-1] = x[-1] - np.maximum(0.0,np.sign(x[-1]-180.0))*360.0
-                    x[-1] = x[-1] - np.minimum(0.0,np.sign(x[-1]+180.0))*360.0
+                x[-1] = fix_lonrange(lons=x[-1],lon_range=lon_range)
                 y.append(fldslice_i.coord('latitude').points)
                 if 'b' in plot_type:
                     xbounds_i,ybounds_i = guess_bounds(x[-1],y[-1])
@@ -779,8 +796,6 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                 else:
                     xbounds.append(None)
                     ybounds.append(None)
-                print('min/max x : ',np.amin(x),np.amax(x))
-                print('min/max y : ',np.amin(y),np.amax(y))
         else:
             for fldslice_i, lons_i, lats_i, plot_type in zip(fldslice[:nscalar],lons[:nscalar],lats[:nscalar],plot_types[:nscalar]):
                 if 'b' in plot_type:
@@ -804,7 +819,6 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     if nscalar:
         for x_i,xbounds_i,y_i,ybounds_i,fldproj_i,plot_type,levs_i,fld_in_i in \
           zip(x[:nscalar],xbounds[:nscalar],y[:nscalar],ybounds[:nscalar],fldproj[:nscalar],plot_types[:nscalar],levs[:nscalar],fld_in[:nscalar]):
-            print('levs_i : ',levs_i)
             plotted=False
             if 'c' in plot_type:
                 ### colour-filled contours ###
@@ -887,14 +901,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         if len(draw_points)%4 != 0:
             raise Exception("Error: number of draw_points (-d) must be a multiple of 4: start_x,start_y,end_x,end_y")
         # fix longitudes to be in the correct range:
-        if lon_range == 1:
-            draw_points[0::2] = [lon - np.maximum(0.0,np.sign(lon))*360.0 for lon in draw_points[0::2]]
-        elif lon_range == 2:
-            draw_points[0::2] = [lon - np.minimum(0.0,np.sign(lon))*360.0 for lon in draw_points[0::2]]
-        elif lon_range == 3:
-            draw_points[0::2] = [lon - np.maximum(0.0,np.sign(lon-180.0))*360.0 for lon in draw_points[0::2]]
-            draw_points[0::2] = [lon - np.minimum(0.0,np.sign(lon+180.0))*360.0 for lon in draw_points[0::2]]
-        #
+        draw_points[0::2] = fix_lonrange(lons=np.array(draw_points[0::2]),lon_range=lon_range)
         fmt = "k-"  # default to black solid lines        
         linewidth = 2
         if draw_fmt is not None:
@@ -905,7 +912,6 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             # pyplot.plot takes all the x-values first and the y-values second...
             plot_x = [draw_points[ii],draw_points[ii+2]]
             plot_y = [draw_points[ii+1],draw_points[ii+3]]
-            print("Plotting : ",plot_x,plot_y," on projection ",p[0])
             if p[0] is None:
                 ax.plot(plot_x[:],plot_y[:],fmt,linewidth=linewidth)
             else:

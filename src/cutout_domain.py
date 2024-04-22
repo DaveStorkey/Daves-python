@@ -33,23 +33,34 @@ def cutout_domain(infile=None,invar=None,outfile=None,
     if east is None:
         east = np.max(lons)
 
-    # restrict longitudes to the range [0,360] 
-    lons[:] = np.remainder(lons[:],360.0)
-    if west is not None:
-        west = west%360.0
-    if east is not None:
-        east = east%360.0
+    print("west, east before check : ",west,east)
 
-    # if we have chosen west and east limits such that the area crosses the
-    # zero meridion we'll have to change to use [-180,180]
-    if west is not None and east is not None and west > east:
-        select_mask = np.where(lons[:] > 180.0,1,0)
-        lons[:] = lons[:] - 360.0*select_mask
-        if west > 180.0:
-            west=west-360.0
-        if east > 180.0:
-            east=east-360.0
-        print('min/max lons after normalisation: ',lons.min(),lons.max())
+    # Restrict west and east to the range [-360,360]
+    # and make sure that east > west within this range.
+    # NB. python modulus function (%) doesn't behave the
+    # same as mathematical modulus for negative numbers!
+    west = ((west*np.sign(west))%360.0)*np.sign(west)
+    east = ((east*np.sign(east))%360.0)*np.sign(east)
+    if east < west:
+        if west < 0.0:
+            east+=360.0
+        else:
+            west-=360.0
+    print("west, east after check : ",west,east)
+    # Fix longitudes to appropriate range depending on the values of [west,east]
+    if west < -180.0:
+        # use range [-360,0]
+        lons[:] = lons[:] - np.maximum(0.0,np.sign(lons[:]))*360.0
+        print("Using range [-360,0] : ",np.min(lons),np.max(lons))
+    elif east > 180.0:
+        # use range [0,360]
+        lons[:] = lons[:] - np.minimum(0.0,np.sign(lons[:]))*360.0
+        print("Using range [0,+360] : ",np.min(lons),np.max(lons))
+    else:
+        # use range [-180,+180]
+        lons[:] = lons[:] - np.maximum(0.0,np.sign(lons[:]-180.0))*360.0
+        lons[:] = lons[:] - np.minimum(0.0,np.sign(lons[:]+180.0))*360.0
+        print("Using range [-180,+180] : ",np.min(lons),np.max(lons))
     
     latsel = lats[np.where((lats >= south) & (lats <= north))]
     lonsel = lons[np.where((lons >= west ) & (lons <= east ))] 
