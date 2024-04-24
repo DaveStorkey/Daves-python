@@ -64,9 +64,7 @@ def cutout_domain(infile=None,invar=None,outfile=None,
     
     latsel = lats[np.where((lats >= south) & (lats <= north))]
     lonsel = lons[np.where((lons >= west ) & (lons <= east ))] 
-
     var_cutout = var.sel(lat=latsel,lon=lonsel)
-    var_cutout.values = np.maximum(0.0, var_cutout.values)
 
     out_dataset = xr.Dataset(
         {
