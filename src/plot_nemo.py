@@ -225,7 +225,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
               facecolor=None,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,no_coast=None,
               empty_coast=None,draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None,Bgrid=False,no_reproj=False,
-              text=None):
+              text=None,textsize=None,textcolor=None,textbgcolor=None):
 
     # short cuts
     projections = { 'none'          : ( None               , ('glob','glob','glob','glob') ),
@@ -905,6 +905,8 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         fmt = "k-"  # default to black solid lines        
         linewidth = 2
         if draw_fmt is not None:
+            if not isinstance(draw_fmt,list):
+                draw_fmt=[draw_fmt]
             fmt = draw_fmt[0]
             if len(draw_fmt) == 2:
                 linewidth = draw_fmt[1] 
@@ -919,13 +921,19 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             
     # Text
     if text is not None:
+        if textcolor is None:
+            textcolor="black"
+        if textsize is None:
+            textsize="medium"    
         if type(text) is list:
             if len(text)%3 !=0:
                 raise Exception('Error: must specify sets of 3 arguments for text: x, y, s. As for matplotlib text.')
         else:
             raise Exception('Error: text should consist of multiples of 3 arguments.')
         for ii in range(0,len(text),3):
-            ax.text(float(text[ii]),float(text[ii+1]),text[ii+2],fontsize=fontsizes[1],transform=ccrs.PlateCarree())
+            ax.text(float(text[ii]),float(text[ii+1]),text[ii+2],fontsize=textsize,color=textcolor,
+                    bbox={"boxstyle":"ellipse, pad=0.1","facecolor":textbgcolor,"edgecolor":textbgcolor},
+                    transform=ccrs.PlateCarree())
 
     # Plot title
     if title is not None:
@@ -1026,6 +1034,12 @@ if __name__=="__main__":
                     help="units (label for colour bar)")
     parser.add_argument("-T", "--text", action="store",dest="text",nargs='+',
                     help="text to add to plot - multiples of 3 arguments: x, y, s as for matplotlib text")
+    parser.add_argument("--textsize", action="store",dest="textsize",
+                    help="Font size for added text. Default medium.")
+    parser.add_argument("--textcolor", action="store",dest="textcolor",
+                    help="Font colour for added text. Default black.")
+    parser.add_argument("--textbgcolor", action="store",dest="textbgcolor",
+                    help="Background font colour for added text. Default None.")
     parser.add_argument("--glob_display", action="store_true",dest="glob_display",default=False,
                     help="force global limits on plotted area even if data is limited area")
     parser.add_argument("--Bgrid", action="store_true",dest="Bgrid",
@@ -1059,5 +1073,11 @@ if __name__=="__main__":
               plot_types=args.plot_types,arrows=args.arrows,vertbar=args.vertbar,colors=args.colors,cmap=args.cmap,
               noshow=args.noshow,units=args.units,nobar=args.nobar,fontsizes=args.fontsizes,facecolor=args.facecolor,
               figx=args.figx,figy=args.figy,no_coast=args.no_coast,empty_coast=args.empty_coast,Bgrid=args.Bgrid,
-              draw_points=args.draw_points,draw_fmt=args.draw_fmt,no_reproj=args.no_reproj,text=args.text)        
+              draw_points=args.draw_points,draw_fmt=args.draw_fmt,no_reproj=args.no_reproj,text=args.text,
+              textsize=args.textsize,textcolor=args.textcolor,textbgcolor=args.textbgcolor)        
     
+
+
+
+
+
