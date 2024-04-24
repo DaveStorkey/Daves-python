@@ -99,6 +99,22 @@ def lonlat_to_float(string_in):
 
     return float_out 
 
+def coordstring(lat,lon):
+
+    if lat < 0.0:
+        latstring = f"{-lat:.2f}S"
+    else:
+        latstring = f"{lat:.2f}N"
+
+    if lon < 0.0:
+        lonstring = f"{-lon:.2f}W"
+    else:
+        lonstring = f"{lon:.2f}E"
+
+    cstring = latstring+" "+lonstring
+
+    return cstring
+
 def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=False,
                proj=None, clobber=False):
 
@@ -161,6 +177,7 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                 s[-1]["width"] = att[2].strip()
                 s[-1]["lat"] = lonlat_to_float(att[3].strip())
                 s[-1]["lon"] = lonlat_to_float(att[4].strip())
+                s[-1]["coordstring"] = coordstring(s[-1]["lat"],s[-1]["lon"])
                 s[-1]["ref"] = att[5].strip()
     except FileNotFoundError:
         raise Exception("Error: file "+database+" not found.")
@@ -203,12 +220,13 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                     north = None
                     west  = None
                     east  = None
-
+              
+                title=[title+": "+sill["name"],sill["coordstring"]+" "+str(sill["depth"])+"m"]
                 (cslines, cscolor, csarrows) = pn.plot_nemo(filenames=filename,sca_names=var,
                                                plot_types="b",cmap="tab20b_r",proj=prj,
                                                mnfld=depmin,mxfld=depmax,west=west,east=east, 
                                                south=south,north=north,vertbar=True,nlevs=21,
-                                               outfile=outfile,title=title+": "+sill["name"],
+                                               outfile=outfile,title=title,
                                                facecolor="white",draw_points=draw_points)
 
 #        if precut:
@@ -230,15 +248,18 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
     with open("ocean_sills.html","x") as webfile:
         webfile.write(html_head)
         section_text=""
+        count = 0
         for sill in s:
-            if sill["section text"] != section_text:
-                if len(section_text) > 0:
+            count += 1
+            if sill["section text"] != section_text or count == 1:
+                if count > 1:
                     webfile.write("</table>")
                 section_text=sill["section text"]
-                webfile.write("<hr><center><h2>"+section_text+"</h2></center><hr>")
+                if len(section_text) > 0:
+                    webfile.write("<hr><center><h2>"+section_text+"</h2></center><hr>")
                 webfile.write("<center><table BORDER=1 COLS='"+ncols+"' WIDTH='90%' style='font-size:90%' NOSAVE >")
             webfile.write("<tr>\n")
-            webfile.write("<th>"+sill["name"]+"</th>\n")
+            webfile.write("<th>"+sill["name"]+"<br>"+sill["coordstring"]+" "+str(sill["depth"])+"m</th>\n")
             for title in titles:
                 imagefile=os.path.join(sill["section dir"],title+"_"+sill["name"].replace(" ","")+".png")
                 webfile.write("<td><center><a href="+imagefile+"><img src="+imagefile+" alt='blah' height='350'></a></center></td>\n")
