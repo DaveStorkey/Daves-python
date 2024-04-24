@@ -938,6 +938,9 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             fig.subplots_adjust(top=0.95-0.05*len(title))
         else:        
             plot_title=textwrap.fill(title[0],70)
+            # Would be clever to adjust this formula to
+            # take account of the title fontsize. 
+            fig.subplots_adjust(top=0.9-0.05*plot_title.count("\n"))
         if subplot is not None:
             plt.gca().set_title(plot_title, fontsize=fontsizes[0])    
         else:
