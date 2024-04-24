@@ -116,7 +116,7 @@ def coordstring(lat,lon):
     return cstring
 
 def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=False,
-               proj=None, clobber=False):
+               proj=None, area_infile=None, area_var=None, clobber=False):
 
     if database is None:
         raise Exception("Error: must specify database file.")
@@ -154,22 +154,28 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
 
     # parse database
     s=[]
+    sections=[]
     section_text=""
     section_dir="."
     try:
         with open(database) as db:
+            count=0 
             for cline in db:
                 if "====" in cline:
                     # new section
+                    count=0
                     section_text=cline[2:].replace("====","").strip()
                     section_dir=section_text.replace(" ","")
+                    sections.append(section_text)
                     if not os.path.isdir(section_dir):
                         os.makedirs(section_dir)
                 if cline[0]=="#" or "|" not in cline:
                     # allow comments in database
                     continue
+                count+=1
                 att=cline.split('|')
                 s.append({})
+                s[-1]["index"] = count
                 s[-1]["section text"] = section_text
                 s[-1]["section dir"] = section_dir
                 s[-1]["name"] = att[0].strip()
@@ -182,7 +188,46 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
     except FileNotFoundError:
         raise Exception("Error: file "+database+" not found.")
 
-    print(len(s)," entries found in database "+database)
+    print(len(sections)," sections found in database "+database)
+    if area_infile is None:
+        area_infile=filenames[0]
+    if area_var is None:
+        area_var=vars[0]
+
+    # plot areas : projection and [W,E,S,N] extent of area to plot for each section.
+    plot_areas = { "North Atlantic"         : ["merc",-90,10,-10,70],
+                   "South Atlantic"         : ["merc",-70,30,-65,10],
+                   "Pacific"                : ["pc180",110,-80,-40,70],
+                   "Arctic"                 : ["northps",None,None,None,None],
+                   "Indonesian Throughflow" : ["pc180",110,140,-20,20] }
+
+    # loop over sections and plot maps with locations of sills marked
+    for sec in sections:
+        print("")
+        print("Plotting map for "+sec)
+        if sec not in plot_areas.keys():
+            print("Can't find specs for "+sec+". Skipping.")
+            continue
+        else:
+           spec=plot_areas[sec]
+        secsills = [sill for sill in s if sill["section text"]==sec]
+        print(len(secsills)," sills found in "+sec)
+        print("")
+        if len(secsills) > 0:
+            plot_text=[]
+            plot_points=[]
+            for sill in secsills:
+                plot_text=plot_text+[sill["lon"]+2.0,sill["lat"],str(sill["index"])]
+                plot_points=plot_points+[sill["lon"]-0.1,sill["lat"]-0.1,sill["lon"]+0.1,sill["lat"]+0.1,
+                                         sill["lon"]-0.1,sill["lat"]+0.1,sill["lon"]+0.1,sill["lat"]-0.1]
+            outfile=os.path.join(sill["section dir"],sec.replace(" ","")+"_map.png")
+            (cslines, cscolor, csarrows) = pn.plot_nemo(filenames=area_infile,sca_names=area_var,proj=spec[0],
+                                           plot_types="b",cmap="cividis_r",mnfld=0.0,mxfld=5500.0,nlevs=21,
+                                           west=spec[1],east=spec[2],south=spec[3],north=spec[4],vertbar=True,
+                                           facecolor="white",text=plot_text,textbgcolor="white",textsize="xx-small",
+                                           draw_points=plot_points,outfile=outfile)
+
+    print(len(s)," sills found in database "+database)
 
     # loop over entries in database and bathymetry files and plot 
     for sill in s:
@@ -257,9 +302,11 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                 section_text=sill["section text"]
                 if len(section_text) > 0:
                     webfile.write("<hr><center><h2>"+section_text+"</h2></center><hr>")
+                    imagefile=os.path.join(sill["section dir"],section_text.replace(" ","")+"_map.png")
+                    webfile.write("<center><a href="+imagefile+"><img src="+imagefile+" alt='blah' height='800'></center>")
                 webfile.write("<center><table BORDER=1 COLS='"+ncols+"' WIDTH='90%' style='font-size:90%' NOSAVE >")
             webfile.write("<tr>\n")
-            webfile.write("<th>"+sill["name"]+"<br>"+sill["coordstring"]+" "+str(sill["depth"])+"m</th>\n")
+            webfile.write("<th>"+str(sill["index"])+". "+sill["name"]+"<br>"+sill["coordstring"]+" "+str(sill["depth"])+"m</th>\n")
             for title in titles:
                 imagefile=os.path.join(sill["section dir"],title+"_"+sill["name"].replace(" ","")+".png")
                 webfile.write("<td><center><a href="+imagefile+"><img src="+imagefile+" alt='blah' height='350'></a></center></td>\n")
@@ -283,9 +330,14 @@ if __name__=="__main__":
         help="if True cutout the data prior to plotting (for large data sets)")
     parser.add_argument("-P", "--proj", action="store",dest="proj",nargs="+",
         help="projection (default PlateCarree")
+    parser.add_argument("-A", "--area_infile", action="store",dest="area_infile",
+        help="Which file to use for plotting section areas (default first input file).")
+    parser.add_argument("--area_var", action="store",dest="area_var",
+                        help="Which variable to use for plotting section areas (default first input variable).")
     parser.add_argument("-X", "--clobber", action="store_true",dest="clobber",
         help="if true, overwrite existing plots (default false)")
     args = parser.parse_args()
  
     plot_sills(database=args.database,filenames=args.filenames,vars=args.vars,
-               titles=args.titles,cutout=args.cutout,proj=args.proj,clobber=args.clobber)
+               titles=args.titles,cutout=args.cutout,proj=args.proj,
+               area_infile=args.area_infile,area_var=args.area_var,clobber=args.clobber)
