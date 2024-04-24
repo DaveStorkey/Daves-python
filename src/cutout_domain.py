@@ -20,9 +20,9 @@ def cutout_domain(infile=None,invar=None,outfile=None,
         invar="elevation"
 
     bathy_in = xr.open_dataset(infile)
-    elev = bathy_in.get(invar)
-    lats = elev.lat.values
-    lons = elev.lon.values
+    var = bathy_in.get(invar)
+    lats = var.lat.values
+    lons = var.lon.values
 
     if south is None:
         south = np.min(lats)
@@ -65,12 +65,12 @@ def cutout_domain(infile=None,invar=None,outfile=None,
     latsel = lats[np.where((lats >= south) & (lats <= north))]
     lonsel = lons[np.where((lons >= west ) & (lons <= east ))] 
 
-    elev_cutout = elev.sel(lat=latsel,lon=lonsel)
-    elev_cutout.values = np.maximum(0.0, -1.0 * elev_cutout.values)
+    var_cutout = var.sel(lat=latsel,lon=lonsel)
+    var_cutout.values = np.maximum(0.0, var_cutout.values)
 
     out_dataset = xr.Dataset(
         {
-            "elevation" : elev_cutout.load()
+            var.name : var_cutout.load()
         },
         coords={
             "lon"      : (('lon'),lonsel,{'standard_name':'longitude','units':'degrees_east','_FillValue':False}),
