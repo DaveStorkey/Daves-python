@@ -929,11 +929,19 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
 
     # Plot title
     if title is not None:
-        title=textwrap.fill(title,70)
+        if not isinstance(title,list):
+            title=[title]
+        if len(title) > 1:
+            plot_title = "\n".join(title)
+            # Would be clever to adjust this formula to
+            # take account of the title fontsize. 
+            fig.subplots_adjust(top=0.95-0.05*len(title))
+        else:        
+            plot_title=textwrap.fill(title[0],70)
         if subplot is not None:
-            plt.gca().set_title(title, fontsize=fontsizes[0])    
+            plt.gca().set_title(plot_title, fontsize=fontsizes[0])    
         else:
-            plt.gcf().suptitle(title, fontsize=fontsizes[0], y=0.95)    
+            plt.gcf().suptitle(plot_title, fontsize=fontsizes[0], y=0.95)    
 
     if outfile is not None:
         matplotlib.rcParams['font.size'] =8
@@ -975,8 +983,8 @@ if __name__=="__main__":
                     help="minimum field value(s) to plot for colour filled contouring - specify None for default")
     parser.add_argument("-F", "--mxfld", action="store",dest="mxfld",default=None,nargs="+",
                     help="maximum field value(s) to plot for colour filled contouring - specify None for default")
-    parser.add_argument("-t", "--title", action="store",dest="title",default=None,
-                    help="title for plot")
+    parser.add_argument("-t", "--title", action="store",dest="title",default=None,nargs="+",
+                    help="title for plot: if more than one argument supplied these are split across lines.")
     parser.add_argument("-Y", "--fontsizes", action="store",dest="fontsizes",nargs='+',
                     help="fontsizes for : plot title, axis labels, axis tick labels. Use None for default.")
     parser.add_argument("-W", "--west", action="store",dest="west",type=float,default=None,
