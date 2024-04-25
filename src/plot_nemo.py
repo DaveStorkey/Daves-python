@@ -509,42 +509,27 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     print("glob_display : ",glob_display)
     print("glob_region : ",glob_region)
 
-    if west != 'glob' and east != 'glob':
-        # Restrict west and east to the range [-360,360]
-        # and make sure that east > west within this range.
-        # NB. python modulus function (%) doesn't behave the
-        # same as mathematical modulus for negative numbers!
-        west = ((west*np.sign(west))%360.0)*np.sign(west)
-        east = ((east*np.sign(east))%360.0)*np.sign(east)
-        if east < west:
-            if west < 0.0:
-                east+=360.0
-            else:
-                west-=360.0
-
-    # Set each of west, east, south, north to be the most restrictive
-    # value of itself and the min/max lon/lat value in the data. This
-    # ensures that regional data isn't displayed on a global area
-    # unless glob_display keyword is set.
+    # replace 'glob' values with min/max of lons and lats
     if west == 'glob':
         west = min(np.min(lons_i) for lons_i in lons)
-    else:
-        west = max(west,min(np.min(lons_i) for lons_i in lons))
     if east == 'glob':
         east = max(np.max(lons_i) for lons_i in lons)
-    else:
-        east = min(east,max(np.max(lons_i) for lons_i in lons))
-    if south == 'glob':
-        south = min(np.min(lats_i) for lats_i in lats)
-    else:
-        south = max(south,min(np.min(lats_i) for lats_i in lats))
     if north == 'glob':
         north = max(np.max(lats_i) for lats_i in lats)
-    else:
-        north = min(north,max(np.max(lats_i) for lats_i in lats))
+    if south == 'glob':
+        south = min(np.min(lats_i) for lats_i in lats)
 
-    region = [west,east,south,north]
-    print('region : ',region)
+    # Restrict west and east to the range [-360,360]
+    # and make sure that east > west within this range.
+    # NB. python modulus function (%) doesn't behave the
+    # same as mathematical modulus for negative numbers!
+    west = ((west*np.sign(west))%360.0)*np.sign(west)
+    east = ((east*np.sign(east))%360.0)*np.sign(east)
+    if east < west:
+        if west < 0.0:
+            east+=360.0
+        else:
+            west-=360.0
 
     # Fix longitudes to appropriate range depending on the values of [west,east]
     if west < -180.0:
@@ -559,6 +544,18 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     print("lon_range: ",lon_range)
     for lons_i in lons:
         lons_i[:] = fix_lonrange(lons=lons_i[:], lon_range=lon_range)
+
+    # Set each of west, east, south, north to be the most restrictive
+    # value of itself and the min/max lon/lat value in the data. This
+    # ensures that regional data isn't displayed on a global area
+    # unless glob_display keyword is set.
+    west = max(west,min(np.min(lons_i) for lons_i in lons))
+    east = min(east,max(np.max(lons_i) for lons_i in lons))
+    south = max(south,min(np.min(lats_i) for lats_i in lats))
+    north = min(north,max(np.max(lats_i) for lats_i in lats))
+
+    region = [west,east,south,north]
+    print('region : ',region)
 
     # Apply factor if required:
     # Important to do this before the masking step below. 
