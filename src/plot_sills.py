@@ -194,12 +194,13 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
     if area_var is None:
         area_var=vars[0]
 
-    # plot areas : projection and [W,E,S,N] extent of area to plot for each section.
-    plot_areas = { "North Atlantic"         : ["merc",-90,10,-10,70],
-                   "South Atlantic"         : ["merc",-70,30,-65,10],
-                   "Pacific"                : ["pc180",110,-80,-40,70],
-                   "Arctic"                 : ["northps",None,None,None,None],
-                   "Indonesian Throughflow" : ["pc180",110,140,-20,20] }
+    # plot areas : projection, [W,E,S,N] extent of area to plot and vertbar (True or False) for each section.
+    plot_areas = { "North Atlantic"         : ["merc",-90,10,-10,70,True],
+                   "South Atlantic"         : ["merc",-70,30,-65,10,True],
+                   "Pacific"                : ["pc180",110,290,-50,70,False],
+                   "Indian Ocean"           : ["pc0"  ,30,120,-65,30,True],
+                   "Arctic"                 : ["northps",None,None,None,None,True],
+                   "Indonesian Throughflow" : ["pc0"  ,80,130,-20,20,True] }
 
     # loop over sections and plot maps with locations of sills marked
     for sec in sections:
@@ -223,7 +224,7 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
             outfile=os.path.join(sill["section dir"],sec.replace(" ","")+"_map.png")
             (cslines, cscolor, csarrows) = pn.plot_nemo(filenames=area_infile,sca_names=area_var,proj=spec[0],
                                            plot_types="b",cmap="cividis_r",mnfld=0.0,mxfld=5500.0,nlevs=21,
-                                           west=spec[1],east=spec[2],south=spec[3],north=spec[4],vertbar=True,
+                                           west=spec[1],east=spec[2],south=spec[3],north=spec[4],vertbar=spec[5],
                                            facecolor="white",text=plot_text,textbgcolor="white",textsize="xx-small",
                                            draw_points=plot_points,outfile=outfile)
 
