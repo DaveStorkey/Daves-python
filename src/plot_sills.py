@@ -194,16 +194,18 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
     if area_var is None:
         area_var=vars[0]
 
-    # plot areas : projection, [W,E,S,N] extent of area to plot and vertbar (True or False) for each section.
-    plot_areas = { "North Atlantic"         : ["merc",-90,10,-10,70,True],
-                   "South Atlantic"         : ["merc",-70,30,-65,10,True],
-                   "Pacific"                : ["pc180",110,290,-50,70,False],
-                   "Indian Ocean"           : ["pc0"  ,30,120,-65,30,True],
-                   "Arctic"                 : ["northps",None,None,None,None,True],
-                   "Indonesian Throughflow" : ["pc0"  ,80,130,-20,20,True] }
+    # plot areas : projection, [W,E,S,N] extent of area to plot, longitudinal offset
+    #              between marker cross and label, and vertbar (True or False) for each section.
+    plot_areas = { "North Atlantic"         : ["merc",-90,10,-10,70,2.0,True],
+                   "South Atlantic"         : ["merc",-70,30,-65,10,2.0,True],
+                   "Pacific"                : ["pc180",110,300,-50,70,3.0,False],
+                   "Indian Ocean"           : ["pc0"  ,30,120,-65,30,2.0,True],
+                   "Arctic"                 : ["northps",None,None,None,None,3.0,True],
+                   "Indonesian Throughflow" : ["pc0"  ,110,135,-15,10,0.5,True] }
 
     # loop over sections and plot maps with locations of sills marked
     for sec in sections:
+        sectag=sec.replace(" ","")
         print("")
         print("Plotting map for "+sec)
         if sec not in plot_areas.keys():
@@ -214,17 +216,17 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
         secsills = [sill for sill in s if sill["section text"]==sec]
         print(len(secsills)," sills found in "+sec)
         print("")
-        if len(secsills) > 0:
+        outfile=os.path.join(sectag,sectag+"_map.png")
+        if len(secsills) > 0 and (clobber or not os.path.exists(outfile)):
             plot_text=[]
             plot_points=[]
             for sill in secsills:
-                plot_text=plot_text+[sill["lon"]+2.0,sill["lat"],str(sill["index"])]
+                plot_text=plot_text+[sill["lon"]+spec[5],sill["lat"],str(sill["index"])]
                 plot_points=plot_points+[sill["lon"]-0.1,sill["lat"]-0.1,sill["lon"]+0.1,sill["lat"]+0.1,
                                          sill["lon"]-0.1,sill["lat"]+0.1,sill["lon"]+0.1,sill["lat"]-0.1]
-            outfile=os.path.join(sill["section dir"],sec.replace(" ","")+"_map.png")
             (cslines, cscolor, csarrows) = pn.plot_nemo(filenames=area_infile,sca_names=area_var,proj=spec[0],
                                            plot_types="b",cmap="cividis_r",mnfld=0.0,mxfld=5500.0,nlevs=21,
-                                           west=spec[1],east=spec[2],south=spec[3],north=spec[4],vertbar=spec[5],
+                                           west=spec[1],east=spec[2],south=spec[3],north=spec[4],vertbar=spec[6],
                                            facecolor="white",text=plot_text,textbgcolor="white",textsize="xx-small",
                                            draw_points=plot_points,outfile=outfile)
 
@@ -248,10 +250,10 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
             outfile = os.path.join(sill["section dir"],title+"_"+compressed_name+".png")
 
             if clobber or not os.path.exists(outfile):
-                south = sill["lat"]-2.5
-                north = sill["lat"]+2.5
-                west = sill["lon"]-2.5
-                east = sill["lon"]+2.5
+                south = sill["lat"]-2.0
+                north = sill["lat"]+2.0
+                west = sill["lon"]-2.0
+                east = sill["lon"]+2.0
                 if filename == filenames[0]:
                     print("south, north, west, east : ",south,north,west,east)
 
@@ -275,11 +277,11 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                                                vertbar=True,outfile=outfile,title=title,
                                                facecolor="white",draw_points=draw_points)
 
-#        if precut:
-#            try:
-#                os.remove(filename)
-#            except FileNotFoundError:
-#                pass
+        if precut:
+            try:
+                os.remove(filename)
+            except FileNotFoundError:
+                pass
 
     # Create web page
     print("")
@@ -293,25 +295,33 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
         os.rename("ocean_sills.html","ocean_sills_OLD.html")
     with open("ocean_sills.html","x") as webfile:
         webfile.write(html_head)
-        section_text=""
-        count = 0
-        for sill in s:
-            count += 1
-            if sill["section text"] != section_text or count == 1:
-                if count > 1:
-                    webfile.write("</table>")
-                section_text=sill["section text"]
-                if len(section_text) > 0:
-                    webfile.write("<hr><center><h2>"+section_text+"</h2></center><hr>")
-                    imagefile=os.path.join(sill["section dir"],section_text.replace(" ","")+"_map.png")
-                    webfile.write("<center><a href="+imagefile+"><img src="+imagefile+" alt='blah' height='800'></center>")
-                webfile.write("<center><table BORDER=1 COLS='"+ncols+"' WIDTH='90%' style='font-size:90%' NOSAVE >")
+        webfile.write("<hr><center><h2>Contents</h2></center><hr>\n")
+        for sec in sections:
+            sectag=sec.replace(" ","")
+            webfile.write("<a href='#"+sectag+"'>"+sec+"</a><br>\n")
+        for sec in sections:
+            sectag=sec.replace(" ","")
+            if sec != sections[0]:
+                webfile.write("</table>")
+            webfile.write("<hr><center><h2 id='"+sectag+"'>"+sec+"</h2></center><hr>\n")
+            imagefile=os.path.join(sill["section dir"],sectag+"_map.png")
+            webfile.write("<center><table COLS='2' WIDTH='90%' style='font-size:90%' NOSAVE >")
             webfile.write("<tr>\n")
-            webfile.write("<th>"+str(sill["index"])+". "+sill["name"]+"<br>"+sill["coordstring"]+" "+str(sill["depth"])+"m</th>\n")
-            for title in titles:
-                imagefile=os.path.join(sill["section dir"],title+"_"+sill["name"].replace(" ","")+".png")
-                webfile.write("<td><center><a href="+imagefile+"><img src="+imagefile+" alt='blah' height='350'></a></center></td>\n")
-            webfile.write("</tr>\n")
+            imagefile=os.path.join(sectag,sectag+"_map.png")
+            webfile.write("<td><center><a href="+imagefile+"><img src="+imagefile+" alt='blah' height='800'></center></td>\n")
+            webfile.write("<td>\n")
+            for sill in [sill for sill in s if sill["section text"]==sec]:
+                webfile.write("<a href='#"+sill["name"].replace(" ","")+"'>"+str(sill["index"])+". "+sill["name"]+"</a><br>\n")            
+            webfile.write("</td></tr></table>\n")
+            webfile.write("<center><table BORDER=1 COLS='"+ncols+"' WIDTH='90%' style='font-size:90%' NOSAVE >\n")
+            for sill in [sill for sill in s if sill["section text"]==sec]:
+                print("Writing web page for sill : "+sill["name"])
+                webfile.write("<tr>\n")
+                webfile.write("<th><a id='"+sill["name"].replace(" ","")+"'>"+str(sill["index"])+". "+sill["name"]+"</a><br>"+sill["coordstring"]+" "+str(sill["depth"])+"m</th>\n")
+                for title in titles:
+                    imagefile=os.path.join(sill["section dir"],title+"_"+sill["name"].replace(" ","")+".png")
+                    webfile.write("<td><center><a href="+imagefile+"><img src="+imagefile+" alt='blah' height='350'></a></center></td>\n")
+                webfile.write("</tr>\n")
         webfile.write(html_tail)
 
 
