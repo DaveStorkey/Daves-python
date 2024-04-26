@@ -270,9 +270,9 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                 title=[title+": "+sill["name"],sill["coordstring"]+" "+str(sill["depth"])+"m"]
                 (cslines, cscolor, csarrows) = pn.plot_nemo(filenames=filename,sca_names=var,
                                                plot_types="b",cmap="tab20b_r",proj=prj,
-                                               mnfld=depmin,mxfld=depmax,west=west,east=east, 
-                                               south=south,north=north,vertbar=True,nlevs=21,
-                                               outfile=outfile,title=title,
+                                               mnfld=depmin,mxfld=depmax,clip=True,nlevs=21,
+                                               west=west,east=east,south=south,north=north,
+                                               vertbar=True,outfile=outfile,title=title,
                                                facecolor="white",draw_points=draw_points)
 
 #        if precut:

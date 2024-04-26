@@ -225,7 +225,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
               facecolor=None,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,no_coast=None,
               empty_coast=None,draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None,Bgrid=False,no_reproj=False,
-              text=None,textsize=None,textcolor=None,textbgcolor=None):
+              text=None,textsize=None,textcolor=None,textbgcolor=None,clip=False):
 
     # short cuts
     projections = { 'none'          : ( None               , ('glob','glob','glob','glob') ),
@@ -657,10 +657,14 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                 mnfld_i = ma.min(fldslice_i.data)
             else:
                 mnfld_i = float(mnfld_i)
+                if clip:
+                    mnfld_i = max(mnfld_i,ma.min(fldslice_i.data))
             if mxfld_i is None or mxfld_i == "None":
                 mxfld_i = ma.max(fldslice_i.data)
             else:
                 mxfld_i = float(mxfld_i)
+                if clip:
+                    mxfld_i = min(mxfld_i,ma.max(fldslice_i.data))
 
             print('nlevs_i : ',nlevs_i)
             if logscale and ( 'c' in plot_type or 'b' in plot_type ):
@@ -1043,6 +1047,8 @@ if __name__=="__main__":
                     help="B-grid fields, so don't regrid vector fields.")
     parser.add_argument("--no_reproj", action="store_true",dest="no_reproj",
                     help="Don't use the reprojection workaround.")
+    parser.add_argument("--clip", action="store_true",dest="clip",
+                    help="Use min/max of data for contour limits if they are more restrictive than mnfld/mxfld.")
     parser.add_argument("--noshow", action="store_true",dest="noshow",
                     help="Don't run plt.show() even if no output file specified (for calls from other python routines).")
     parser.add_argument("--no_coast", action="store_true",dest="no_coast",
@@ -1063,7 +1069,7 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     plot_nemo(filenames=args.filenames,sca_names=args.sca_names,vec_names=args.vec_names,rec=args.rec,level=args.level,
-              nlevs=args.nlevs,mnfld=args.mnfld,mxfld=args.mxfld,clinewidth=args.clinewidth,
+              nlevs=args.nlevs,mnfld=args.mnfld,mxfld=args.mxfld,clinewidth=args.clinewidth,clip=args.clip,
               title=args.title,glob_display=args.glob_display,west=args.west,east=args.east,south=args.south,north=args.north,
               proj=args.proj,maskfile=args.maskfile,outfile=args.outfile,bottom=args.bottom,scientific=args.scientific,
               reverse_colors=args.reverse_colors,logscale=args.logscale,factor=args.factor,zeromean=args.zeromean,
