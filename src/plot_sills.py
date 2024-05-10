@@ -3,7 +3,7 @@
 '''
 Wrapper script for plot_nemo.py to plot the bathymetry in the
 region of the sills/channels identified in "Sills of the Global
-Ocean" by Simon Thompson (1995).
+Ocean" by Simon Thompson (1995) and produce a web page.
 
 Read in details of each location from a simple database.
 
@@ -289,7 +289,7 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
     print("")
     html_head, html_tail = html_pieces()
     html_tail = html_tail.replace("DATE_TEXT","{:%d %b %Y %H:%M}".format(datetime.datetime.now()))
-    ncols=str(len(s)).strip()
+    ncols=str(len(titles)).strip()
 
     if os.path.exists("ocean_sills.html"):
         os.rename("ocean_sills.html","ocean_sills_OLD.html")
@@ -315,9 +315,10 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
             webfile.write("</td></tr></table>\n")
             webfile.write("<center><table BORDER=1 COLS='"+ncols+"' WIDTH='90%' style='font-size:90%' NOSAVE >\n")
             for sill in [sill for sill in s if sill["section text"]==sec]:
-                print("Writing web page for sill : "+sill["name"])
                 webfile.write("<tr>\n")
-                webfile.write("<th><a id='"+sill["name"].replace(" ","")+"'>"+str(sill["index"])+". "+sill["name"]+"</a><br>"+sill["coordstring"]+" "+str(sill["depth"])+"m</th>\n")
+                webfile.write("<th colspan='"+ncols+"'><a id='"+sill["name"].replace(" ","")+"'>"+str(sill["index"])+". "+sill["name"]+"</a><br>"+sill["coordstring"]+" "+str(sill["depth"])+"m</th>\n")
+                webfile.write("</tr>\n")
+                webfile.write("<tr>\n")
                 for title in titles:
                     imagefile=os.path.join(sill["section dir"],title+"_"+sill["name"].replace(" ","")+".png")
                     webfile.write("<td><center><a href="+imagefile+"><img src="+imagefile+" alt='blah' height='350'></a></center></td>\n")
