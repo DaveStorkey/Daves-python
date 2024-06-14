@@ -95,18 +95,20 @@ def process_fields(uvtype, trdtype, infile):
     '''
     Process input fields if necessary
     '''
-    indata = xr.open_dataset(infile)    
-
     if trdtype == "adv":
-        if uvtype+"_adv" in indata.data_vars:
-            # nothing to do
-            return
-        # ADV = RVO + KEG + ZAD (for vector invariant form)
-        for intype in "rvo", "keg", "zad":
-            if uvtype+"_"+intype not in indata.data_vars:
-                raise Exception("Could not find "+uvtype+"_"+intype+" in file "+infile)
-        trd_adv = indata.data_vars[uvtype+"_rvo"] + indata.data_vars[uvtype+"_keg"] + indata.data_vars[uvtype+"_zad"]         
-        trd_adv.to_netcdf(infile,mode="a")
+        with xr.open_dataset(infile) as indata:
+            if uvtype+"_adv" in indata.data_vars:
+                # nothing to do
+                return
+            # ADV = RVO + KEG + ZAD (for vector invariant form)
+            for intype in "rvo", "keg", "zad":
+                if uvtype+"_"+intype not in indata.data_vars:
+                    raise Exception("Could not find "+uvtype+"_"+intype+" in file "+infile)
+            print("indata.data_vars.keys()): ",indata.data_vars.keys())
+            print("Looking for field "+uvtype+"_rvo")
+            indata.data_vars[uvtype+"_rvo"]
+            trd_adv = indata.data_vars[uvtype+"_rvo"] + indata.data_vars[uvtype+"_keg"] + indata.data_vars[uvtype+"_zad"]         
+            trd_adv.to_netcdf(infile,mode="a")
 
     elif trdtype == "res":
         # TBD!

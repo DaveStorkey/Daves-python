@@ -10,7 +10,8 @@ Integrate field (x optional scalar) over specified model levels.
 import xarray as xr
 import numpy as np
 
-def vert_integrate(file_in=None, var_in=None, file_out=None, var_out=None, levels=None, factor=None, avg=None):
+def vert_integrate(file_in=None, var_in=None, depvar=None, file_out=None, var_out=None, levels=None, 
+                   factor=None, avg=None):
 
     if not file_in or not var_in or not file_out:
         raise Exception("Error: must specify file_in, var_in and file_out.")
@@ -29,6 +30,9 @@ def vert_integrate(file_in=None, var_in=None, file_out=None, var_out=None, level
     else:
         if len(var_out) != len(var_in):
             raise Exception("Error: number of output variables must match number of input variables")
+
+    if depvar is None:
+        depvar="deptht"
 
     if not factor:
         factor=1.0
@@ -51,17 +55,18 @@ def vert_integrate(file_in=None, var_in=None, file_out=None, var_out=None, level
 
         # vertically integrate
         field_int3D = field * thick * factor
+        depths = field.coords[depvar]
         if avg:
             if levels:
-                thick_int = thick.isel(deptht=slice(levels[0],levels[1])).sum(dim="deptht")
+                thick_int = xr.where(depths==slice(levels[0],levels[1]),thick,0.0).sum(dim=depvar)
             else:
-                thick_int = thick.sum(dim="deptht")
+                thick_int = thick.sum(dim=depvar)
         else:
             thick_int = 1.0
         if levels:
-            field_int = field_int3D.isel(deptht=slice(levels[0],levels[1])).sum(dim="deptht") / thick_int
+            field_int = xr.where(depths==slice(levels[0],levels[1]),field_int3D,0.0).sum(dim=depvar) / thick_int
         else:
-            field_int = field_int3D.sum(dim="deptht") / thick_int
+            field_int = field_int3D.sum(dim=depvar) / thick_int
 
         if invar == var_in[0]:
             outdata = field_int.to_dataset(name=outvar)
@@ -77,6 +82,8 @@ if __name__=="__main__":
                          help="input file")
     parser.add_argument("-v", "--var_in", action="store",dest="var_in",nargs="+",
                          help="name of input variable")
+    parser.add_argument("-d", "--depvar", action="store",dest="depvar",
+                         help="name of depth coordinate variable (default deptht)")
     parser.add_argument("-o", "--file_out", action="store",dest="file_out",
                          help="output file")
     parser.add_argument("-w", "--var_out", action="store",dest="var_out",nargs="+",
@@ -90,6 +97,7 @@ if __name__=="__main__":
 
     args = parser.parse_args()
 
-    vert_integrate(file_in=args.file_in,var_in=args.var_in,file_out=args.file_out,var_out=args.var_out,
+    vert_integrate(file_in=args.file_in,var_in=args.var_in,depvar=args.depvar,
+                   file_out=args.file_out,var_out=args.var_out,
                    levels=args.levels,factor=args.factor,avg=args.avg)
 
