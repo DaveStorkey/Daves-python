@@ -116,7 +116,8 @@ def coordstring(lat,lon):
     return cstring
 
 def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=False,
-               proj=None, area_infile=None, area_var=None, clobber=False):
+               proj=None, plotsize=None, area_infile=None, area_var=None, clobber=False,
+               xsection_dir=None):
 
     if database is None:
         raise Exception("Error: must specify database file.")
@@ -146,6 +147,9 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
         cutout=[cutout]
     if len(cutout) == 1 and len(filenames) > 1:
         cutout=len(filenames)*cutout
+
+    if plotsize is None:
+        plotsize = 2.0
 
     if not isinstance(proj,list):
         proj=[proj]
@@ -227,7 +231,7 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
             (cslines, cscolor, csarrows) = pn.plot_nemo(filenames=area_infile,sca_names=area_var,proj=spec[0],
                                            plot_types="b",cmap="cividis_r",mnfld=0.0,mxfld=5500.0,nlevs=21,
                                            west=spec[1],east=spec[2],south=spec[3],north=spec[4],vertbar=spec[6],
-                                           facecolor="white",text=plot_text,textbgcolor="white",textsize="xx-small",
+                                           facecolor="lightgrey",text=plot_text,textbgcolor="white",textsize="xx-small",
                                            draw_points=plot_points,outfile=outfile)
 
     print(len(s)," sills found in database "+database)
@@ -241,19 +245,31 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                        sill["lon"]-0.1,sill["lat"]+0.1,sill["lon"]+0.1,sill["lat"]+0.1,
                        sill["lon"]+0.1,sill["lat"]+0.1,sill["lon"]+0.1,sill["lat"]-0.1,
                        sill["lon"]+0.1,sill["lat"]-0.1,sill["lon"]-0.1,sill["lat"]-0.1]
+        draw_fmt    = 4 * ["k-"]
         depmin = max(0.0   ,sill["depth"]-1000.0)
         depmax = min(5500.0,sill["depth"]+1000.0)
         compressed_name = sill["name"].replace(" ","").replace("/","")
+        if xsection_dir is not None:
+            xfilename = os.path.join(xsection_dir,"section_XTRAC_"+compressed_name+".dat")
+            if os.path.exists(xfilename):
+                with open(xfilename) as xfilein:
+                    xfile = xfilein.read().splitlines()
+                    npoints = int(xfile[1])
+                    for point in range(npoints-1):                       
+                        start_lon,start_lat = xfile[point+2].split()
+                        end_lon  ,end_lat   = xfile[point+3].split()
+                        draw_points = draw_points + [float(start_lon),float(start_lat),float(end_lon),float(end_lat)]
+                        draw_fmt    = draw_fmt    + ["r-"]
 
         for filename,var,title,precut,prj in zip(filenames,vars,titles,cutout,proj):
             filestem=filename.replace(".nc","")
             outfile = os.path.join(sill["section dir"],title+"_"+compressed_name+".png")
 
             if clobber or not os.path.exists(outfile):
-                south = sill["lat"]-2.0
-                north = sill["lat"]+2.0
-                west = sill["lon"]-2.0
-                east = sill["lon"]+2.0
+                south = sill["lat"]-plotsize
+                north = sill["lat"]+plotsize
+                west = sill["lon"]-plotsize
+                east = sill["lon"]+plotsize
                 if filename == filenames[0]:
                     print("south, north, west, east : ",south,north,west,east)
 
@@ -275,7 +291,8 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                                                mnfld=depmin,mxfld=depmax,clip=True,nlevs=21,
                                                west=west,east=east,south=south,north=north,
                                                vertbar=True,outfile=outfile,title=title,
-                                               facecolor="white",draw_points=draw_points)
+                                               facecolor="white",draw_points=draw_points,
+                                               draw_fmt=draw_fmt)
 
         if precut:
             try:
@@ -342,6 +359,10 @@ if __name__=="__main__":
         help="if True cutout the data prior to plotting (for large data sets)")
     parser.add_argument("-P", "--proj", action="store",dest="proj",nargs="+",
         help="projection (default PlateCarree")
+    parser.add_argument("-Z", "--plotsize", action="store",dest="plotsize",type=float,
+        help="half size of plots in degrees (default = 2.0)")
+    parser.add_argument("-S", "--xsection_dir", action="store",dest="xsection_dir",
+        help="directory with definitions of Marine_Val sections to be plotted where applicable.")
     parser.add_argument("-A", "--area_infile", action="store",dest="area_infile",
         help="Which file to use for plotting section areas (default first input file).")
     parser.add_argument("--area_var", action="store",dest="area_var",
@@ -351,5 +372,6 @@ if __name__=="__main__":
     args = parser.parse_args()
  
     plot_sills(database=args.database,filenames=args.filenames,vars=args.vars,
-               titles=args.titles,cutout=args.cutout,proj=args.proj,
-               area_infile=args.area_infile,area_var=args.area_var,clobber=args.clobber)
+               titles=args.titles,cutout=args.cutout,proj=args.proj,plotsize=args.plotsize,
+               area_infile=args.area_infile,area_var=args.area_var,clobber=args.clobber,
+               xsection_dir=args.xsection_dir)
