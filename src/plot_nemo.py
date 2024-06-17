@@ -224,8 +224,8 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
               scientific=False,cmap=None,colors=None,reverse_colors=False,glob_display=None,west=None,east=None,south=None,north=None,
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
               facecolor=None,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,no_coast=None,
-              empty_coast=None,draw_points=None,draw_fmt=None,fontsizes=None,clinewidth=None,Bgrid=False,no_reproj=False,
-              text=None,textsize=None,textcolor=None,textbgcolor=None,clip=False):
+              empty_coast=None,draw_points=None,draw_fmt=None,draw_width=None,fontsizes=None,clinewidth=None,Bgrid=False,
+              no_reproj=False,text=None,textsize=None,textcolor=None,textbgcolor=None,clip=False):
 
     # short cuts
     projections = { 'none'          : ( None               , ('glob','glob','glob','glob') ),
@@ -901,24 +901,28 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     if draw_points is not None:
         if len(draw_points)%4 != 0:
             raise Exception("Error: number of draw_points (-d) must be a multiple of 4: start_x,start_y,end_x,end_y")
+        else:
+            nlines = int(len(draw_points)/4)
         # fix longitudes to be in the correct range:
         draw_points[0::2] = fix_lonrange(lons=np.array(draw_points[0::2]),lon_range=lon_range)
-        fmt = "k-"  # default to black solid lines        
-        linewidth = 2
-        if draw_fmt is not None:
+        if draw_fmt is None:
+            draw_fmt = nlines*["k-"]  # default to black solid lines        
+        else:
             if not isinstance(draw_fmt,list):
-                draw_fmt=[draw_fmt]
-            fmt = draw_fmt[0]
-            if len(draw_fmt) == 2:
-                linewidth = draw_fmt[1] 
-        for ii in range(0,len(draw_points),4):
+                draw_fmt = nlines*[draw_fmt]
+        if draw_width is None:
+            draw_width = nlines*[2]  # default 
+        else:
+            if not isinstance(draw_width,list):
+                draw_width = nlines*[draw_width]
+        for ii,jj in zip(range(0,len(draw_points),4),range(nlines)):
             # pyplot.plot takes all the x-values first and the y-values second...
             plot_x = [draw_points[ii],draw_points[ii+2]]
             plot_y = [draw_points[ii+1],draw_points[ii+3]]
             if p[0] is None:
-                ax.plot(plot_x[:],plot_y[:],fmt,linewidth=linewidth)
+                ax.plot(plot_x[:],plot_y[:],draw_fmt[jj],linewidth=draw_width[jj])
             else:
-                ax.plot(plot_x[:],plot_y[:],fmt,linewidth=linewidth,transform=ccrs.PlateCarree())
+                ax.plot(plot_x[:],plot_y[:],draw_fmt[jj],linewidth=draw_width[jj],transform=ccrs.PlateCarree())
             
     # Text
     if text is not None:
@@ -1064,7 +1068,9 @@ if __name__=="__main__":
     parser.add_argument("--draw_points", action="store",dest="draw_points",type=float,nargs="+",
                     help="list of points to draw line segments between in groups of four: start_lon,start_lat,end_lon,end_lat")
     parser.add_argument("--draw_fmt", action="store",dest="draw_fmt",nargs="+",
-                    help="first argument is format for line segments as for fmt keyword for pyplot.plot; second optional argument is line thickness")
+                    help="format for line segments as for fmt keyword for pyplot.plot")
+    parser.add_argument("--draw_width", action="store",dest="draw_width",nargs="+",
+                    help="linewidths for line segments")
 
     args = parser.parse_args()
 
@@ -1076,8 +1082,8 @@ if __name__=="__main__":
               plot_types=args.plot_types,arrows=args.arrows,vertbar=args.vertbar,colors=args.colors,cmap=args.cmap,
               noshow=args.noshow,units=args.units,nobar=args.nobar,fontsizes=args.fontsizes,facecolor=args.facecolor,
               figx=args.figx,figy=args.figy,no_coast=args.no_coast,empty_coast=args.empty_coast,Bgrid=args.Bgrid,
-              draw_points=args.draw_points,draw_fmt=args.draw_fmt,no_reproj=args.no_reproj,text=args.text,
-              textsize=args.textsize,textcolor=args.textcolor,textbgcolor=args.textbgcolor)        
+              draw_points=args.draw_points,draw_fmt=args.draw_fmt,draw_width=args.draw_width, no_reproj=args.no_reproj,
+              text=args.text,textsize=args.textsize,textcolor=args.textcolor,textbgcolor=args.textbgcolor)        
     
 
 
