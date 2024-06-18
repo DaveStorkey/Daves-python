@@ -115,6 +115,20 @@ def coordstring(lat,lon):
 
     return cstring
 
+def read_xsection(xfilename):
+    '''
+    Routine to read in the "LONLAT" section definition files
+    used by cdftransport
+    '''
+    xsec_points=[]
+    if os.path.exists(xfilename):
+        with open(xfilename) as xfilein:
+            xfile = xfilein.read().splitlines()
+            print("xfile[1].split() : ",xfile[1].split())
+            start_lon, end_lon, start_lat, end_lat = xfile[1].split()
+            xsec_points = xsec_points + [float(start_lon),float(start_lat),float(end_lon),float(end_lat)]
+    return xsec_points
+
 def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=False,
                proj=None, plotsize=None, area_infile=None, area_var=None, clobber=False,
                xsection_dir=None):
@@ -207,6 +221,11 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                    "Arctic"                 : ["northps",None,None,None,None,3.0,True],
                    "Indonesian Throughflow" : ["pc0"  ,110,135,-15,10,0.5,True] }
 
+    # configname list : for looking for configuration-specific transport section definitions
+    # NB. The order of this list is important. The string "eORCA1" is in "eORCA12" so we need 
+    #     to check for eORCA12 first.
+    confignamelist = [ "eORCA12", "eORCA025", "eORCA1" ]
+
     # loop over sections and plot maps with locations of sills marked
     for sec in sections:
         sectag=sec.replace(" ","")
@@ -249,21 +268,17 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
         depmin = max(0.0   ,sill["depth"]-1000.0)
         depmax = min(5500.0,sill["depth"]+1000.0)
         compressed_name = sill["name"].replace(" ","").replace("/","")
+        xsec_generic=[]
         if xsection_dir is not None:
-            xfilename = os.path.join(xsection_dir,"section_XTRAC_"+compressed_name+".dat")
-            if os.path.exists(xfilename):
-                with open(xfilename) as xfilein:
-                    xfile = xfilein.read().splitlines()
-                    npoints = int(xfile[1])
-                    for point in range(npoints-1):                       
-                        start_lon,start_lat = xfile[point+2].split()
-                        end_lon  ,end_lat   = xfile[point+3].split()
-                        draw_points = draw_points + [float(start_lon),float(start_lat),float(end_lon),float(end_lat)]
-                        draw_fmt    = draw_fmt    + ["r-"]
-
+            xsec_generic = read_xsection(os.path.join(xsection_dir,"section_LONLAT_"+compressed_name+".dat"))
         for filename,var,title,precut,prj in zip(filenames,vars,titles,cutout,proj):
             filestem=filename.replace(".nc","")
             outfile = os.path.join(sill["section dir"],title+"_"+compressed_name+".png")
+            config=""
+            for configname in confignamelist:
+                if configname in filename or configname in title:
+                    config=configname
+                    break
 
             if clobber or not os.path.exists(outfile):
                 south = sill["lat"]-plotsize
@@ -285,14 +300,26 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                     west  = None
                     east  = None
               
+                xsec_config=[]
+                if xsection_dir is not None and len(config) > 0:
+                    xsec_config = read_xsection(os.path.join(xsection_dir,"section_LONLAT_"+compressed_name+"_"+config+".dat"))
+                if len(xsec_config) > 0:
+                    xsec_points = xsec_config
+                    xsec_fmt = ["r-"]
+                elif len(xsec_generic) > 0:
+                    xsec_points = xsec_generic
+                    xsec_fmt = ["r-"]
+                else:
+                    xsec_points=[]
+                    xsec_fmt=[]
                 title=[title+": "+sill["name"],sill["coordstring"]+" "+str(sill["depth"])+"m"]
                 (cslines, cscolor, csarrows) = pn.plot_nemo(filenames=filename,sca_names=var,
                                                plot_types="b",cmap="tab20b_r",proj=prj,
                                                mnfld=depmin,mxfld=depmax,clip=True,nlevs=21,
                                                west=west,east=east,south=south,north=north,
                                                vertbar=True,outfile=outfile,title=title,
-                                               facecolor="white",draw_points=draw_points,
-                                               draw_fmt=draw_fmt)
+                                               facecolor="white",draw_points=draw_points+xsec_points,
+                                               draw_fmt=draw_fmt+xsec_fmt)
 
         if precut:
             try:
