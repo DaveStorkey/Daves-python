@@ -115,19 +115,30 @@ def coordstring(lat,lon):
 
     return cstring
 
-def read_xsection(xfilename):
+def read_xsection(xfile_template):
     '''
     Routine to read in the "LONLAT" section definition files
-    used by cdftransport
+    used by cdftransport and the "XTRAC" section definition
+    files used by cdf_xtrac_brokenline. Read both if available.
     '''
-    xsec_points=[]
-    if os.path.exists(xfilename):
-        with open(xfilename) as xfilein:
-            xfile = xfilein.read().splitlines()
-            print("xfile[1].split() : ",xfile[1].split())
-            start_lon, end_lon, start_lat, end_lat = xfile[1].split()
-            xsec_points = xsec_points + [float(start_lon),float(start_lat),float(end_lon),float(end_lat)]
-    return xsec_points
+    lonlat_points=[]
+    xtrac_points=[]
+    for filetype,xsec_points in zip(["LONLAT","XTRAC"],[lonlat_points,xtrac_points]):
+        if os.path.exists(xfile_template.replace("TYPE",filetype)):
+            print(xfile_template.replace("TYPE",filetype)+" exists.")
+            with open(xfile_template.replace("TYPE",filetype)) as xfilein:
+                xfile = xfilein.read().splitlines()
+                if filetype == "LONLAT":
+                    start_lon, end_lon, start_lat, end_lat = xfile[1].split()
+                    lonlat_points = [float(start_lon),float(start_lat),float(end_lon),float(end_lat)]
+                elif filetype == "XTRAC":
+                    start_lon, start_lat = xfile[2].split()
+                    end_lon  , end_lat   = xfile[3].split()
+                    xtrac_points = [float(start_lon),float(start_lat),float(end_lon),float(end_lat)]
+        else:
+            print(xfile_template.replace("TYPE",filetype)+" does not exist.")
+
+    return lonlat_points,xtrac_points
 
 def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=False,
                proj=None, plotsize=None, area_infile=None, area_var=None, clobber=False,
@@ -214,12 +225,14 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
 
     # plot areas : projection, [W,E,S,N] extent of area to plot, longitudinal offset
     #              between marker cross and label, and vertbar (True or False) for each section.
-    plot_areas = { "North Atlantic"         : ["merc",-90,10,-10,70,2.0,True],
-                   "South Atlantic"         : ["merc",-70,30,-65,10,2.0,True],
-                   "Pacific"                : ["pc180",110,300,-50,70,3.0,False],
-                   "Indian Ocean"           : ["pc0"  ,30,120,-65,30,2.0,True],
-                   "Arctic"                 : ["northps",None,None,None,None,3.0,True],
-                   "Indonesian Throughflow" : ["pc0"  ,110,135,-15,10,0.5,True] }
+    plot_areas = { "North Atlantic"             : ["merc",-90,10,-10,70,2.0,True],
+                   "North Atlantic Overflows"   : ["merc",-60,10, 45,70,2.0,True],
+                   "Marginal Seas           "   : ["merc",-10,60, 10,35,2.0,True],
+                   "South Atlantic"             : ["merc",-70,30,-65,10,2.0,True],
+                   "Pacific"                    : ["pc180",110,300,-50,70,3.0,False],
+                   "Indian Ocean"               : ["pc0"  ,30,120,-65,30,2.0,True],
+                   "Arctic"                     : ["northps",None,None,None,None,3.0,True],
+                   "Indonesian Throughflow"     : ["pc0"  ,110,135,-15,10,0.5,True] }
 
     # configname list : for looking for configuration-specific transport section definitions
     # NB. The order of this list is important. The string "eORCA1" is in "eORCA12" so we need 
@@ -268,9 +281,10 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
         depmin = max(0.0   ,sill["depth"]-1000.0)
         depmax = min(5500.0,sill["depth"]+1000.0)
         compressed_name = sill["name"].replace(" ","").replace("/","")
-        xsec_generic=[]
+        lonlat_generic=[]
+        xtrac_generic=[]
         if xsection_dir is not None:
-            xsec_generic = read_xsection(os.path.join(xsection_dir,"section_LONLAT_"+compressed_name+".dat"))
+            lonlat_generic,xtrac_generic = read_xsection(os.path.join(xsection_dir,"section_TYPE_"+compressed_name+".dat"))
         for filename,var,title,precut,prj in zip(filenames,vars,titles,cutout,proj):
             filestem=filename.replace(".nc","")
             outfile = os.path.join(sill["section dir"],title+"_"+compressed_name+".png")
@@ -288,6 +302,40 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                 if filename == filenames[0]:
                     print("south, north, west, east : ",south,north,west,east)
 
+                lonlat_config=[]
+                xtrac_config=[]
+                if xsection_dir is not None and len(config) > 0:
+                    lonlat_config, xtrac_config = read_xsection(os.path.join(xsection_dir,"section_TYPE_"+compressed_name+"_"+config+".dat"))
+
+                xsec_points=[]
+                if len(lonlat_config) > 0:
+                    xsec_points += lonlat_config
+                elif len(lonlat_generic) > 0:
+                    xsec_points += lonlat_generic
+                if len(xtrac_config) > 0:
+                    xsec_points += xtrac_config
+                elif len(xtrac_generic) > 0:
+                    xsec_points += xtrac_generic
+                print("xsec_points : ",xsec_points)
+
+                if len(xsec_points) == 0:
+                    xsec_fmt=[]
+                elif len(xsec_points) == 4:
+                    xsec_fmt=['r-']
+                elif len(xsec_points) == 8:
+                    xsec_fmt=['r-','r--']
+                print("xsec_fmt : ",xsec_fmt)
+
+                if len(xsec_points) > 0:
+                    if xsec_points[0] < west:
+                        west = xsec_points[0]-0.1   
+                    if xsec_points[1] < south:
+                        south = xsec_points[1]-0.1   
+                    if xsec_points[2] > east:
+                        east = xsec_points[2]+0.1   
+                    if xsec_points[3] > north:
+                        north = xsec_points[3]+0.1   
+
                 print("")
                 print("precut : ",precut)
                 print("")
@@ -300,18 +348,6 @@ def plot_sills(database=None, filenames=None, vars=None, titles=None, cutout=Fal
                     west  = None
                     east  = None
               
-                xsec_config=[]
-                if xsection_dir is not None and len(config) > 0:
-                    xsec_config = read_xsection(os.path.join(xsection_dir,"section_LONLAT_"+compressed_name+"_"+config+".dat"))
-                if len(xsec_config) > 0:
-                    xsec_points = xsec_config
-                    xsec_fmt = ["r-"]
-                elif len(xsec_generic) > 0:
-                    xsec_points = xsec_generic
-                    xsec_fmt = ["r-"]
-                else:
-                    xsec_points=[]
-                    xsec_fmt=[]
                 title=[title+": "+sill["name"],sill["coordstring"]+" "+str(sill["depth"])+"m"]
                 (cslines, cscolor, csarrows) = pn.plot_nemo(filenames=filename,sca_names=var,
                                                plot_types="b",cmap="tab20b_r",proj=prj,
