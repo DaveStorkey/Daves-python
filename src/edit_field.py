@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 
 '''
-Script to a 2D field at particular (i,j) points as specified
-by a text file file. Generalisation of edit_bathy.py but this 
+Script to edit a 2D field at particular (i,j) points as specified
+by a text file. Generalisation of edit_bathy.py but this 
 version allows you to specify ranges of i and j which will 
 take the same value. 
 
@@ -63,7 +63,7 @@ def field_edit(file_in=None, file_out=None, varname=None, edits_file=None):
     outdata = field.to_dataset()    
     if nav_lat is not None and nav_lon is not None:
         outdata.update({'nav_lat':nav_lon ,
-                        'nav_lat':nav_lon })
+                        'nav_lon':nav_lon })
 
     outdata.to_netcdf(file_out)
                 
