@@ -406,9 +406,9 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
                  xsec_indices=None,xpoints=None,xpoints_bounds=None,xpoints_name=None,
                  lat=None,lon=None,index_i=None,index_j=None,levs=None,nlevs=15,
                  rec=None,mnfld=None,mxfld=None,xmin=None,xmax=None,depthmax=None,method=None,logscale=None, 
-                 reverseX=None,kilometres=None,outfile=None,toldeg=None,
+                 reverseX=None,kilometres=None,outfile=None,toldeg=None,no_mask=None,
                  noshow=None,nobar=None,scientific=None,figx=None,figy=None,subplot=None,
-                 plot_types=None,colors=None,linestyles=None,linewidths=None,cmap=None,factor=None,
+                 plot_types=None,colors=None,linestyles=None,linewidths=None,no_clabel=None,cmap=None,factor=None,
                  fmt=None,fontsizes=None,maskzero=None,draw_points=None,draw_fmt=None,text=None,textsize=None,
                  xtrac=None,label_lon=None,label_lat=None,fill_south=None,units=None,vertbar=None):
 
@@ -743,7 +743,7 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
         else:
             ax = plt.gca()
 
-        if count == 1: 
+        if count == 1 and not no_mask: 
             # Plot the mask - only for the first field or we overwrite previously-plotted fields!
             # Keep the original mask before we fill fld_xsec prior to contouring.
             mask_to_plot = fld_xsec.mask.copy()
@@ -763,7 +763,7 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
         if 'c' in plot_type:
             ### colour-filled contours ###
             plotted=True
-            cscolor=plt.contourf(xpoints,depth.points,fld_xsec,cmap=cmap,levels=levs_i,colorbar=None,extend='both')
+            cscolor=plt.contourf(xpoints,depth.points,fld_xsec,cmap=cmap,levels=levs_i,extend='both')
         elif 'b' in plot_type:
             ### block plot ###
             plotted=True
@@ -780,54 +780,15 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
             else:
                 levs_line = levs_i
             csline=plt.contour(xpoints,depth.points,fld_xsec_filled,colors=colors,levels=levs_i,
-                               linewidths=linewidths,linestyles=linestyles,colorbar=None)
-            if fmt is None:
-                fmt='%1.1f'
-            plt.clabel(csline,inline=True,manual=False,fontsize=fontsizes[3],fmt=fmt)
+                               linewidths=linewidths,linestyles=linestyles)
+            if not no_clabel:
+                if fmt is None:
+                    fmt='%1.1f'
+                plt.clabel(csline,inline=True,manual=False,fontsize=fontsizes[3],fmt=fmt)
 
         if not plotted: 
             print('plot_type : ',plot_type)
-            raise Exception("Error: Something has gone wrong. Scalar plot_type should be 'l' or 'c' or 'b' or 'cl' or 'lc'")
-
-#        if plot_type == 'l':
-#            ### contour lines ###
-#            fld_xsec_filled = fill_field(fld_xsec)
-#            print("Plotting line contours.")
-#            if colors is not None and cmap is not None:
-#                csline = plt.contour(xpoints,depth.points,fld_xsec_filled, colors=colors, levels=levs_i,linewidths=0.5)
-#            else:
-#                csline = plt.contour(xpoints,depth.points,fld_xsec_filled, colors=colors, cmap=cmap, 
-#                                     levels=levs_i,linewidths=0.5)
-##            manual_locations=[(35,1000)]
-#            if fmt is None:
-#                fmt='%1.1f'
-#            plt.clabel(csline,csline.levels[::2],inline=True,manual=False,fontsize=fontsizes[3],fmt=fmt)
-#        elif plot_type == 'c':
-#            ### colour-filled contours ###
-#            print("Plotting colour-filled contours.")
-#            fld_xsec_filled = fill_field(fld_xsec)
-#            cscolor = plt.contourf(xpoints,depth.points,fld_xsec,cmap=cmap,levels=levs_i)
-#        elif plot_type == 'b':
-#            ### colour-filled blocks ###
-#            if colors is not None and nvar == 1:
-#                (cmap_block,norm_block) = matplotlib.colors.from_levels_and_colors(levs_i,colors)
-#            else:
-#                cmap_block = cmap
-#            cscolor = plt.pcolormesh(xpoints_bounds, depth_bounds, fld_xsec, cmap=cmap_block, vmin=mnfld_i, vmax=mxfld_i)
-#        elif plot_type == 'bl':
-#            ### block plot and lines for the same field ###
-#            if colors is not None and nvar == 1:
-#                (cmap_block,norm_block) = matplotlib.colors.from_levels_and_colors(levs_i,colors)
-#            else:
-#                cmap_block = cmap
-#            cscolor = plt.pcolormesh(xpoints_bounds, depth_bounds, fld_xsec, cmap=cmap_block, vmin=mnfld_i, vmax=mxfld_i)
-#            fld_xsec_filled = fill_field(fld_xsec)
-#            csline = plt.contour(xpoints,depth.points,fld_xsec_filled, colors="black", levels=levs_i,linewidths=0.5)
-#            if fmt is None:
-#                fmt='%1.1f'
-#            plt.clabel(csline,inline=True,manual=False,fontsize=fontsizes[3],fmt=fmt)
-#        else:
-#            raise Exception("Error: unknown plot_type: "+plot_type)
+            raise Exception("Error: Something has gone wrong. Scalar plot_type should be one of 'l(f)','c','b','cl(f)','bl(f)'")
 
         if not nobar and plot_type != 'l':
             if vertbar:
@@ -986,6 +947,10 @@ if __name__=="__main__":
                     help="linestyles keyword for line contours.")
     parser.add_argument("--linewidths", action="store",dest="linewidths",nargs='+',default=0.5,
                     help="linewidths keyword for line contours.")
+    parser.add_argument("--no_clabel", action="store_true",dest="no_clabel",
+                    help="suppress labelling of contour lines.")
+    parser.add_argument("--no_mask", action="store_true",dest="no_mask",
+                    help="suppress plotting of bathymetry as a filled contour field.")
     parser.add_argument("-c", "--cmap", action="store",dest="cmap",
                     help="colour map for contour plotting - inbuilt matplotlib colour map or external loaded with monty.clr_cmap")
     parser.add_argument("-N", "--noshow", action="store_true",dest="noshow",
@@ -1026,8 +991,8 @@ if __name__=="__main__":
     xmin=args.xmin, xmax=args.xmax,mnfld=args.mnfld, mxfld=args.mxfld, depthmax=args.depthmax, method=args.method, 
     logscale=args.logscale, reverseX=args.reverseX, kilometres=args.kilometres, toldeg=args.toldeg, 
     noshow=args.noshow, nobar=args.nobar, scientific=args.scientific, plot_types=args.plot_types,
-    colors=args.colors, linestyles=args.linestyles,linewidths=args.linewidths,cmap=args.cmap, factor=args.factor,
-    fmt=args.fmt,maskzero=args.maskzero,
+    colors=args.colors, linestyles=args.linestyles,linewidths=args.linewidths,cmap=args.cmap,no_clabel=args.no_clabel, 
+    no_mask=args.no_mask,factor=args.factor,fmt=args.fmt,maskzero=args.maskzero,
     draw_points=args.draw_points,draw_fmt=args.draw_fmt,text=args.text,textsize=args.textsize,xtrac=args.xtrac,
     label_lon=args.label_lon,label_lat=args.label_lat,fill_south=args.fill_south,
     units=args.units,vertbar=args.vertbar,figx=args.figx,figy=args.figy)
