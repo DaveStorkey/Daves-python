@@ -102,10 +102,12 @@ def project_field(field_in, lons_in, lats_in, proj=None, bounds=False):
 
     # Reproject the data onto a regular grid (with dimensions set by the number of pixels in the subplot, 
     # as above)
+
     x_extent = plt.gca().get_extent()[:2]
     y_extent = plt.gca().get_extent()[-2:]
     x, y = ctpy.img_transform.mesh_projection(proj, nx, ny, x_extents=x_extent, y_extents=y_extent)[:2]
     field_out = ctpy.img_transform.regrid(field_in, lons_in, lats_in, ccrs.PlateCarree(), proj, x, y)
+    print("field_out: ",field_out)
 
     if bounds:
         # need to guess the coordinate bounds because Iris doesn't do bounds
@@ -221,10 +223,11 @@ def fix_lonrange(lons=None,lon_range=None):
     return lons
 
 def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,mxfld=None,title=None,rec=0,level=1,bottom=False,
-              scientific=False,cmap=None,colors=None,reverse_colors=False,glob_display=None,west=None,east=None,south=None,north=None,
+              scientific=False,cmap=None,colors=None,linewidths=None,linestyles=None,
+              glob_display=None,west=None,east=None,south=None,north=None,
               proj=None,maskfile=None,outfile=None,logscale=None,factor=None,plot_types=None,zeromean=False,arrows=None,
               facecolor=None,noshow=None,units=None,vertbar=None,nobar=None,figx=None,figy=None,subplot=None,no_coast=None,
-              empty_coast=None,draw_points=None,draw_fmt=None,draw_width=None,fontsizes=None,clinewidth=None,Bgrid=False,
+              empty_coast=None,draw_points=None,draw_fmt=None,draw_width=None,fontsizes=None,Bgrid=False,
               no_reproj=False,text=None,textsize=None,textcolor=None,textbgcolor=None,clip=False):
 
     # short cuts
@@ -310,9 +313,6 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             if fontsize is not None:
                 fontsizes_list[count]=fontsize
     fontsizes = fontsizes_list
-
-    if clinewidth is None:
-        clinewidth=0.5
 
 # Organise control parameters that apply to individual fields.
 # In general with multiple fields and a single value of the control
@@ -410,11 +410,14 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         else:
             fld.append(fldi)
 
+    vecmask = None
     if maskfile is not None:
+        count = -1
         for fldi,maskfile_i in zip(fld,maskfile):
-# mask the field using the mask field in maskfile
+            # mask the field using the mask field in maskfile
+            count += 1
             if maskfile_i is not None:
-                for maskname in ['mask', 'bathy', 'bathymetry', 'Bathymetry']:
+                for maskname in ['mask', 'tmask', 'umask', 'vmask', 'bathy', 'bathymetry', 'Bathymetry']:
                     try:
                         mask = iris.load_cube(maskfile_i,iris.Constraint(cube_func=lambda nemoname: nemoname.var_name == maskname) ) 
                     except iris.exceptions.ConstraintMismatchError:
@@ -429,17 +432,27 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                 except AttributeError:
                     maskvalue = 0.0
 
-# assume the mask field has the correct number of dimensions!
-                fldi.data = ma.masked_where( mask.data == maskvalue, fldi.data )
+                if regrid_vector and ( count == v1 or count == v2 ):
+                    # if we are regridding vector fields then save the mask
+                    # and mask the vector fields after the regridding
+                    vecmask = mask
+                else:
+                    # assume the mask field has the correct number of dimensions!
+                    fldi.data = ma.masked_where( mask.data == maskvalue, fldi.data )
 
     # interpolate to T-points. If we are plotting the vector field at the bottom then 
     # do this *before* selecting the bottom field:
     if regrid_vector and bottom[v1]:
-        fld[v1],fld[v2] = UaT.U_at_T_points(fld[v1],fld[v2])
+        if maskfile is not None:
+            fld[v1],fld[v2] = UaT.U_at_T_points(vector=[fld[v1],fld[v2]],tmask=vecmask)
+        else:
+            fld[v1],fld[v2] = UaT.U_at_T_points(vector=[fld[v1],fld[v2]])
 
 # extract bottom field if required using mask...
     fldslice=[]
     for fldi,bottom_i,level_i in zip(fld,bottom,level):
+
+        # extract bottom field if required using mask ...
         if bottom_i and fldi.ndim == 3:
             print('Extracting bottom field for '+fldi.var_name)
             fldslice.append(fldi[0].copy())
@@ -455,14 +468,17 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                     fldslice[-1].data[:,:] = np.ma.where( (~fldi.data.mask[lev,:,:] & fldi.data.mask[lev+1,:,:]), 
                                                   x=fldi.data[lev-1,:,:], y=fldslice[-1].data[:,:] )
 
-# ... or select required level
+        # ... or select required level
         else:
             if fldi.ndim == 3:
                print ('Extracting level ',level_i,' from field.')
                fldslice.append(fldi[level_i-1])
             else:
                fldslice.append(fldi)
-
+            if vecmask is not None:
+               if vecmask.ndim == 3 and vecmask.shape[0] > 1:
+                   vecmask = vecmask[level_i-1]
+               
         print('min/max fldslice : ',fldslice[-1].data.min(),fldslice[-1].data.max())
 
     # Do interpolation and rotation of vector fields *after* we have 
@@ -470,7 +486,13 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
 
     # interpolate to T-points:
     if regrid_vector and not bottom[v1]:
-        fldslice[v1],fldslice[v2] = UaT.U_at_T_points(fldslice[v1],fldslice[v2])
+        if vecmask is not None:
+#            print("vecmask.data.shape : ",vecmask.data.shape)
+#            print("vecmask.data.count : ",vecmask.data.count())
+#            print("vecmask.data.count_masked : ",vecmask.data.count_masked())
+            fldslice[v1],fldslice[v2] = UaT.U_at_T_points(vector=[fldslice[v1],fldslice[v2]],tmask=vecmask)
+        else:
+            fldslice[v1],fldslice[v2] = UaT.U_at_T_points(vector=[fldslice[v1],fldslice[v2]])
 
     # rotate to be relative to geographical coordinates rather than model grid:
     # (unnecessary if we are only plotting the magnitude of the vector field).
@@ -629,8 +651,11 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
      
     if nvector:
         # apply the original mask for the calculation (because we may want to use this for the plotting)...
-        u = fldslice[v1].data; u.mask = mask_keep[v1]
-        v = fldslice[v2].data; v.mask = mask_keep[v2]
+        u = fldslice[v1].data
+        v = fldslice[v2].data
+        if not glob_region:
+            u.mask = mask_keep[v1]
+            v.mask = mask_keep[v2]
         speed = ma.sqrt(u*u + v*v)
         if not nscalar and not vec_only:
             # Append vector magnitude to the beginning of the fldslice list.
@@ -641,7 +666,8 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             lats = [lats[v1]]+lats[:]
             plot_types = [plot_types[v1]]+plot_types[:]
             fldslice = [fldslice[0].copy()] + fldslice
-            mask_keep = [mask_keep[0].copy()] + mask_keep
+            if not glob_region:
+                mask_keep = [mask_keep[0].copy()] + mask_keep
             # hardwired for now - doesn't really matter
             fldslice[0].standard_name = "sea_water_speed"
             fldslice[0].data = speed[:]  
@@ -700,9 +726,6 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                 # assume that it refers to a matplotlib inbuilt colour map:
                 print('reading inbuilt matplotlib colour map')
                 cmap = getattr(matplotlib.cm,cmap)
-                if reverse_colors:
-                    cmap = mcolors.ListedColormap(cmap(np.arange(255,-1,-1)))
-
 
         print('colors : ',colors)
         print('cmap : ',cmap)
@@ -762,7 +785,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             gl.xformatter = LONGITUDE_FORMATTER
             gl.yformatter = LATITUDE_FORMATTER
 
-    if 'ps' in proj:
+    if 'ps' in proj and not glob_region:
         # for polar stereographic plots reapply the original field mask to avoid
         # "circle in a square" effect.
         for fldslice_i, mask_i in zip(fldslice,mask_keep):
@@ -838,7 +861,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
                 else:
                     levs_line = levs_i
                 csline=plt.contour(x_i,y_i,fldproj_i,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
-                                   colors=colors,linewidths=clinewidth)
+                                   colors=colors,linestyles=linestyles,linewidths=linewidths)
             if not plotted: 
                 print('plot_type : ',plot_type)
                 raise Exception("Error: Something has gone wrong. Scalar plot_type should be 'l' or 'c' or 'b' or 'cl' or 'lc'")
@@ -993,8 +1016,6 @@ if __name__=="__main__":
                     help="plot to output file - filetype by extension. If unset plot to GUI.")
     parser.add_argument("-n", "--nlevs", action="store",dest="nlevs",type=int,default=15,nargs="+",
                     help="number of contour levels")
-    parser.add_argument("-L", "--clinewidth", action="store",dest="clinewidth",type=float,default=0.5,
-                    help="width of contour lines (default 0.5)")
     parser.add_argument("-f", "--mnfld", action="store",dest="mnfld",default=None,nargs="+",
                     help="minimum field value(s) to plot for colour filled contouring - specify None for default")
     parser.add_argument("-F", "--mxfld", action="store",dest="mxfld",default=None,nargs="+",
@@ -1019,10 +1040,12 @@ if __name__=="__main__":
                     help="scientific format for colour bar labels")
     parser.add_argument("-C", "--colors", action="store",dest="colors",default=None,nargs='+',
                     help="list of colors to use for line contouring.")
+    parser.add_argument("--linewidths", action="store",dest="linewidths",type=float,nargs="+",default=0.5,
+                    help="width of contour lines (default 0.5)")
+    parser.add_argument("--linestyles", action="store",dest="linestyles",type=float,nargs="+",
+                    help="linestyles for contour lines")
     parser.add_argument("-c", "--cmap", action="store",dest="cmap",default=None,
-                    help="colour map for filled contour or block plotting - inbuilt matplotlib colour map or external loaded with monty.clr_cmap")
-    parser.add_argument("-R", "--reverse_colors", action="store_true",dest="reverse_colors",
-                    help="reverse colour map table")
+                    help="colour map for filled contour or block plotting - matplotlib colour map")
     parser.add_argument("-g", "--logscale", action="store_true",dest="logscale",
                     help="use colour logscale")
     parser.add_argument("-V", "--vertbar", action="store_true",dest="vertbar",
@@ -1075,11 +1098,12 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     plot_nemo(filenames=args.filenames,sca_names=args.sca_names,vec_names=args.vec_names,rec=args.rec,level=args.level,
-              nlevs=args.nlevs,mnfld=args.mnfld,mxfld=args.mxfld,clinewidth=args.clinewidth,clip=args.clip,
+              nlevs=args.nlevs,mnfld=args.mnfld,mxfld=args.mxfld,clip=args.clip,
               title=args.title,glob_display=args.glob_display,west=args.west,east=args.east,south=args.south,north=args.north,
               proj=args.proj,maskfile=args.maskfile,outfile=args.outfile,bottom=args.bottom,scientific=args.scientific,
-              reverse_colors=args.reverse_colors,logscale=args.logscale,factor=args.factor,zeromean=args.zeromean,
-              plot_types=args.plot_types,arrows=args.arrows,vertbar=args.vertbar,colors=args.colors,cmap=args.cmap,
+              logscale=args.logscale,factor=args.factor,zeromean=args.zeromean,
+              plot_types=args.plot_types,arrows=args.arrows,vertbar=args.vertbar,colors=args.colors,
+              linewidths=args.linewidths,linestyles=args.linestyles,cmap=args.cmap,
               noshow=args.noshow,units=args.units,nobar=args.nobar,fontsizes=args.fontsizes,facecolor=args.facecolor,
               figx=args.figx,figy=args.figy,no_coast=args.no_coast,empty_coast=args.empty_coast,Bgrid=args.Bgrid,
               draw_points=args.draw_points,draw_fmt=args.draw_fmt,draw_width=args.draw_width, no_reproj=args.no_reproj,
