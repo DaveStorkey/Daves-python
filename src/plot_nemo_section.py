@@ -795,18 +795,22 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
                 cax = plt.colorbar(cscolor,orientation='vertical')
             else:
                 cax = plt.colorbar(cscolor,orientation='horizontal')
+            if len(levs_i) > 11:
+                levs_ticks = np.linspace(levs_i[0],levs_i[-1],11)
+            else:
+                levs_ticks = levs_i
             if plot_type == 'b':
 #                print('norm_block(levs) : ',norm_block(levs))
 #                cax.set_ticks(norm_block(levs))
-                print('levs_i : ',levs_i)
-                cax.set_ticks(levs_i)
+                print('levs_ticks : ',levs_ticks)
+                cax.set_ticks(levs_ticks)
             else:
-                print('levs_i : ',levs_i)
-                cax.set_ticks(levs_i)
+                print('levs_ticks : ',levs_ticks)
+                cax.set_ticks(levs_ticks)
             if scientific:
-                labels=["%1.2e" %lev for lev in levs_i]
+                labels=["%1.2e" %lev for lev in levs_ticks]
             else:
-                labels=["%1.2f" %lev for lev in levs_i]
+                labels=["%1.2f" %lev for lev in levs_ticks]
             if vertbar:
                 cax.ax.set_yticklabels(labels,fontsize=fontsizes[2])
             else:
