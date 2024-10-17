@@ -406,7 +406,7 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
                  xsec_indices=None,xpoints=None,xpoints_bounds=None,xpoints_name=None,
                  lat=None,lon=None,index_i=None,index_j=None,levs=None,nlevs=15,
                  rec=None,mnfld=None,mxfld=None,xmin=None,xmax=None,depthmax=None,method=None,logscale=None, 
-                 reverseX=None,kilometres=None,outfile=None,toldeg=None,no_mask=None,
+                 reverseX=None,kilometres=None,outfile=None,toldeg=None,no_mask=None,depth_km=None,
                  noshow=None,nobar=None,scientific=None,figx=None,figy=None,subplot=None,
                  plot_types=None,colors=None,linestyles=None,linewidths=None,no_clabel=None,cmap=None,factor=None,
                  fmt=None,fontsizes=None,maskzero=None,draw_points=None,draw_fmt=None,text=None,textsize=None,
@@ -715,8 +715,13 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
         else:
             raise Exception("Error: could not find depth coordinate.")
 
+        if depth_km:
+            depth.points = depth.points*0.001
+
         try:
             depth_bounds = np.concatenate((depth.bounds[:,0],np.array([depth.bounds[-1,1]])))
+            if depth_km:
+                depth_bounds = depth_bounds * 0.001
         except(TypeError):
             depth_bounds = get_depth_bounds(depth.points)
         print('depth_bounds : ',depth_bounds)
@@ -753,7 +758,7 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
             try:
                 iterator = iter(mask_to_plot)
             except TypeError:
-                pass
+               pass
             else:
                 cmap_mask = matplotlib.colors.ListedColormap(cm.binary(np.arange(128)))
                 cscolor_mask = plt.pcolormesh(xpoints_bounds, depth_bounds, mask_to_plot, cmap=cmap_mask)
@@ -867,7 +872,10 @@ def plot_nemo_section(filenames=None,var_names=None,title=None,
     else:
         ax.invert_yaxis()
 
-    ax.set_ylabel('depth (m)',fontsize=fontsizes[1])
+    if depth_km:
+        ax.set_ylabel('depth (km)',fontsize=fontsizes[1])
+    else:
+        ax.set_ylabel('depth (m)',fontsize=fontsizes[1])
     if kilometres:
         if lon is not None or 'lat' in xpoints_name:
             ax.set_xlabel('south-north distance (km)',fontsize=fontsizes[1])
@@ -987,6 +995,8 @@ if __name__=="__main__":
                     help="x-dimension of figure (in inches I think)")
     parser.add_argument("--figy", action="store",dest="figy",default=None,type=float,
                     help="y-dimension of figure (in inches I think)")
+    parser.add_argument("--depth_km", action="store_true",dest="depth_km",
+                    help="label depths in km instead of metres")
 
     args = parser.parse_args()
 
@@ -999,6 +1009,6 @@ if __name__=="__main__":
     no_mask=args.no_mask,factor=args.factor,fmt=args.fmt,maskzero=args.maskzero,
     draw_points=args.draw_points,draw_fmt=args.draw_fmt,text=args.text,textsize=args.textsize,xtrac=args.xtrac,
     label_lon=args.label_lon,label_lat=args.label_lat,fill_south=args.fill_south,
-    units=args.units,vertbar=args.vertbar,figx=args.figx,figy=args.figy)
+                      units=args.units,vertbar=args.vertbar,figx=args.figx,figy=args.figy,depth_km=args.depth_km)
        
 
