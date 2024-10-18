@@ -959,9 +959,14 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         else:
             raise Exception('Error: text should consist of multiples of 3 arguments.')
         for ii in range(0,len(text),3):
-            ax.text(float(text[ii]),float(text[ii+1]),text[ii+2],fontsize=textsize,color=textcolor,
-                    bbox={"boxstyle":"ellipse, pad=0.1","facecolor":textbgcolor,"edgecolor":textbgcolor},
-                    transform=ccrs.PlateCarree())
+            if textbgcolor is not None:
+                # in this case add a background ellipse for the text with fill colour textbgcolor
+                ax.text(float(text[ii]),float(text[ii+1]),text[ii+2],fontsize=textsize,color=textcolor,
+                        bbox={"boxstyle":"ellipse, pad=0.1","facecolor":textbgcolor,"edgecolor":textbgcolor},
+                        transform=ccrs.PlateCarree())
+            else:
+                ax.text(float(text[ii]),float(text[ii+1]),text[ii+2],fontsize=textsize,color=textcolor,
+                        transform=ccrs.PlateCarree())
 
     # Plot title
     if title is not None:
