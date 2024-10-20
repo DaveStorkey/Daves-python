@@ -264,16 +264,13 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     if sca_names is None and vec_names is None:
         raise Exception('Error: must specify at least one scalar or vector field.')
     if sca_names is not None:
-        if len(sca_names) > 2: 
-            raise Exception('Error: specify zero, one or two scalar fields')
-        else:
-            nscalar = len(sca_names)
-            if len(filenames) < len(sca_names):
-                filenames = [filenames[0],filenames[0]]
-            for filename in filenames[0:len(sca_names)]:
-                filenames_to_read.append(filename)
-                filenames.remove(filename)
-            varnames_to_read = varnames_to_read + sca_names
+        nscalar = len(sca_names)
+        if len(filenames) < len(sca_names):
+            filenames = [filenames[0]]*len(sca_names)
+        for filename in filenames[0:len(sca_names)]:
+            filenames_to_read.append(filename)
+            filenames.remove(filename)
+        varnames_to_read = varnames_to_read + sca_names
     if vec_names is not None:
         if len(vec_names) != 2: 
             raise Exception('Error: specify zero or two vector components')
@@ -325,8 +322,8 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
         plot_types=[]
         if nscalar == 1:
             plot_types = ['c']
-        elif nscalar == 2:
-            plot_types = ['c','l']
+        elif nscalar >= 2:
+            plot_types = ['c']+['l']*(nscalar-1)
         if nvector:
             plot_types = plot_types+['a']
     else:
@@ -545,8 +542,10 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     # and make sure that east > west within this range.
     # NB. python modulus function (%) doesn't behave the
     # same as mathematical modulus for negative numbers!
-    west = ((west*np.sign(west))%360.0)*np.sign(west)
-    east = ((east*np.sign(east))%360.0)*np.sign(east)
+    if abs(west) != 360.0:
+        west = ((west*np.sign(west))%360.0)*np.sign(west)
+    if abs(east) != 360.0:
+        east = ((east*np.sign(east))%360.0)*np.sign(east)
     if east < west:
         if west < 0.0:
             east+=360.0
@@ -719,8 +718,20 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
 
             if colors is None:
                 # default to black for line contouring
-                colors = "black"
-
+                colors = ["black"]*nscalar
+            elif type(colors) is not list:
+                colors = [colors]*nscalar
+            
+            if linestyles is None:
+                linestyles = [None]*nscalar
+            elif type(linestyles) is not list:
+                linestyles = [linestyles]*nscalar
+            
+            if linewidths is None:
+                linewidths = [None]*nscalar
+            elif type(linewidths) is not list:
+                linewidths = [linewidths]*nscalar
+            
             # sort out colour map for filled or line contouring
             if cmap is not None and ('c' in plot_type or 'b' in plot_type):
                 # assume that it refers to a matplotlib inbuilt colour map:
@@ -840,6 +851,7 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
     cscolor=None
     csarrows=None
 
+    countline=-1
     if nscalar:
         for x_i,xbounds_i,y_i,ybounds_i,fldproj_i,plot_type,levs_i,fld_in_i in \
           zip(x[:nscalar],xbounds[:nscalar],y[:nscalar],ybounds[:nscalar],fldproj[:nscalar],plot_types[:nscalar],levs[:nscalar],fld_in[:nscalar]):
@@ -856,12 +868,13 @@ def plot_nemo(filenames=None,sca_names=None,vec_names=None,nlevs=13,mnfld=None,m
             if 'l' in plot_type:
                 ### contour lines ###
                 plotted=True
+                countline+=1
                 if len(levs_i) > 10 and 'f' not in plot_type:
                     levs_line = levs_i[::2]
                 else:
                     levs_line = levs_i
                 csline=plt.contour(x_i,y_i,fldproj_i,levels=levs_line,mxfld=levs_i[-1],mnfld=levs_i[0],colorbar=None,
-                                   colors=colors,linestyles=linestyles,linewidths=linewidths)
+                                   colors=colors[countline],linestyles=linestyles[countline],linewidths=linewidths[countline])
             if not plotted: 
                 print('plot_type : ',plot_type)
                 raise Exception("Error: Something has gone wrong. Scalar plot_type should be 'l' or 'c' or 'b' or 'cl' or 'lc'")
