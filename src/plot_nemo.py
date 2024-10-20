@@ -1060,7 +1060,7 @@ if __name__=="__main__":
                     help="list of colors to use for line contouring.")
     parser.add_argument("--linewidths", action="store",dest="linewidths",type=float,nargs="+",default=0.5,
                     help="width of contour lines (default 0.5)")
-    parser.add_argument("--linestyles", action="store",dest="linestyles",type=float,nargs="+",
+    parser.add_argument("--linestyles", action="store",dest="linestyles",nargs="+",
                     help="linestyles for contour lines")
     parser.add_argument("-c", "--cmap", action="store",dest="cmap",default=None,
                     help="colour map for filled contour or block plotting - matplotlib colour map")
