@@ -41,7 +41,7 @@ def density_census(infile=None,dens_name=None,threshold=None,box=None,outfile=No
     print("threshold : ",threshold)
     print("min/max densities : ",dens.data.min(),dens.data.max())
     if threshold is not None:
-        dens.data   = ma.masked_where(dens.data[:] < threshold, dens.data[:])
+#        dens.data   = ma.masked_where(dens.data[:] < threshold, dens.data[:])
         thick.data  = ma.masked_where(dens.data[:] < threshold, thick.data[:])
         volume.data = ma.masked_where(dens.data[:] < threshold, volume.data[:])
         if box is not None:
@@ -52,16 +52,20 @@ def density_census(infile=None,dens_name=None,threshold=None,box=None,outfile=No
             print("box : ",box)
             if box[0] != "None":
                 # west limit
-                volume.data = ma.masked_where(lons > float(box[0]), volume.data[:]) 
+                thick.data = ma.masked_where(lons < float(box[0]), thick.data[:]) 
+                volume.data = ma.masked_where(lons < float(box[0]), volume.data[:]) 
             if box[1] != "None":
                 # east limit
-                volume.data = ma.masked_where(lons < float(box[1]), volume.data[:]) 
+                thick.data = ma.masked_where(lons > float(box[1]), thick.data[:]) 
+                volume.data = ma.masked_where(lons > float(box[1]), volume.data[:]) 
             if box[2] != "None":
                 # south limit
-                volume.data = ma.masked_where(lats > float(box[2]), volume.data[:]) 
+                thick.data = ma.masked_where(lats < float(box[2]), thick.data[:]) 
+                volume.data = ma.masked_where(lats < float(box[2]), volume.data[:]) 
             if box[3] != "None":
                 # north limit
-                volume.data = ma.masked_where(lats < float(box[3]), volume.data[:]) 
+                thick.data = ma.masked_where(lats > float(box[3]), thick.data[:]) 
+                volume.data = ma.masked_where(lats > float(box[3]), volume.data[:]) 
         thickbottom = thick.collapsed("depth",iris.analysis.SUM)
         thickbottom.var_name = "thickAABW"
         thickbottom.long_name = "thickness of AABW"
