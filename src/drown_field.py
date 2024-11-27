@@ -57,10 +57,10 @@ def drown_field(file_in=None, file_out=None, varnames=None, vert_fill=None,
         with xr.open_dataset(new_mask_file) as new_mask_in:
             new_mask = getattr(new_mask_in,new_mask_name)
 
-    if vert_fill:
-        # just fill in from points immediately above
-        for field in fields:
-            drowned_field = field
+    for field in fields:
+        drowned_field = field
+        if vert_fill:
+            # just fill in from points immediately above
             nn = 0
             while nn < niter:
                 nn += 1
@@ -68,10 +68,8 @@ def drown_field(file_in=None, file_out=None, varnames=None, vert_fill=None,
                 field_up = np.roll(field_zeros.values,shift=-1,axis=-3)
                 drowned_field.values = xr.where( np.isnan(drowned_field.values),
                                            field_up, drowned_field )
-    else:
-        # do horizontal averaging of neighbouring non-NaN points
-        for field in fields:
-            drowned_field = field
+        else:
+            # do horizontal averaging of neighbouring non-NaN points
             nn = 0
             while nn < niter:
                 nn += 1
@@ -96,6 +94,11 @@ def drown_field(file_in=None, file_out=None, varnames=None, vert_fill=None,
                             ( field_n  + field_s  + field_e  + field_w +
                               field_nw + field_ne + field_sw + field_se ) / weights, drowned_field)
 
+        if field.name == fields[0].name:
+            outdata = drowned_field.to_dataset()    
+        else:
+            outdata[field.name] = drowned_field
+
     if new_mask is not None:
         n_fail = np.count_nonzero( (np.isnan(drowned_field[0].values) & new_mask == 1) )
         if n_fail > 0:
@@ -103,11 +106,6 @@ def drown_field(file_in=None, file_out=None, varnames=None, vert_fill=None,
             print(np.where( (np.isnan(drowned_field[0].values) & new_mask == 1) ))
         else:
             print("No more NaNs at sea points in new mask.")
-
-    if field.name == fields[0].name:
-        outdata = drowned_field.to_dataset()    
-    else:
-        outdata[field.name] = drowned_field
 
     if nav_lat is not None and nav_lon is not None:
         outdata.update({'nav_lat':nav_lon ,
