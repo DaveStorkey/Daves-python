@@ -15,6 +15,9 @@
 #              4. Add legend. 
 #              5. Add option for scientific format of xtick labels.
 #              DS.
+#
+# Nov 2024  : Rename plot_histogram_multi.py -> plot_histogram_coords.py 
+#             and put in a couple of fixes/tweaks. DS.
 
 import netCDF4 as nc
 import matplotlib
@@ -24,7 +27,7 @@ import numpy.ma as ma
 import textwrap
 
 def plot_histogram(filenames=None, varnames=None, outfile=None, coordsfilenames=None, 
-                   logy=False, nbins=None, grid=None, xmin=None, xmax=None, ymin=None, ymax=None, 
+                   logy=False, nbins=None, grid=None, xmin=None, xmax=None, ymin=None, ymax=None, alpha=None,
                    rec=None, printvalues=False,fieldlabel=None,legend=None,scientific=None,title=None):
 
     if len(varnames) != len(filenames):
@@ -127,19 +130,25 @@ def plot_histogram(filenames=None, varnames=None, outfile=None, coordsfilenames=
                 volume_valid_points = volume_valid_points[np.where(infield_valid_points > xmin)]
             elif area_census:
                 area_valid_points = area_valid_points[np.where(infield_valid_points > xmin)]
+        else:
+            # in this case set xmin to be the minimum of the *first* field
+            xmin = np.min(infield_valid_points)
         if xmax is not None:
             infield_valid_points = infield_valid_points[np.where(infield_valid_points < xmax)]
             if volume_census:
                 volume_valid_points = volume_valid_points[np.where(infield_valid_points < xmax)]
             elif area_census:
                 area_valid_points = area_valid_points[np.where(infield_valid_points < xmax)]
+        else:
+            # in this case set xmax to be the maximum of the *first* field
+            xmax = np.max(infield_valid_points)
 
         if volume_census:
-            hist, bins = np.histogram(infield_valid_points, bins=nbins, weights=volume_valid_points)
+            hist, bins = np.histogram(infield_valid_points, bins=nbins, range=(xmin,xmax), weights=volume_valid_points)
         elif area_census:
-            hist, bins = np.histogram(infield_valid_points, bins=nbins, weights=area_valid_points)
+            hist, bins = np.histogram(infield_valid_points, bins=nbins, range=(xmin,xmax), weights=area_valid_points)
         else:
-            hist, bins = np.histogram(infield_valid_points, bins=nbins)
+            hist, bins = np.histogram(infield_valid_points, bins=nbins, range=(xmin,xmax))
         if printvalues:
             for (b1,b2,h) in zip(bins[0:-1],bins[1:],hist):
                 print(b1,b2,h)
@@ -149,7 +158,7 @@ def plot_histogram(filenames=None, varnames=None, outfile=None, coordsfilenames=
                 print('total volume : ',np.sum(hist),' km3')
         width = 0.8 * (bins[1] - bins[0])
         center = (bins[:-1] + bins[1:]) / 2
-        plt.bar(center, hist, align='center', width=width)
+        plt.bar(center, hist, align='center', width=width, alpha=alpha)
 
     if xmin is None:
         xmin = np.amin(infield_valid_points)
@@ -219,21 +228,23 @@ if __name__=="__main__":
                     help="maximum value of y-axis")
     parser.add_argument("-n", "--nbins", action="store",dest="nbins",type=int,default=None,
                     help="number of bins for histogram (default 50)")
-    parser.add_argument("-G", "--logy", action="store_true",dest="logy",default=False,
+    parser.add_argument("-G", "--logy", action="store_true",dest="logy",
                     help="log scale for y-axis")
     parser.add_argument("-L", "--legend", action="store",dest="legend",nargs="+",
                     help="legend entries")
     parser.add_argument("-e", "--scientific", action="store_true",dest="scientific",
                     help="scientific format for x-axis labels")
-    parser.add_argument("-p", "--print", action="store_true",dest="printvalues",default=False,
+    parser.add_argument("-p", "--print", action="store_true",dest="printvalues",
                     help="print out bins and values of the histogram as well as plotting ")
-    parser.add_argument("-t", "--title", action="store",dest="title",default=None,
+    parser.add_argument("-t", "--title", action="store",dest="title",
                     help="title for plot")
+    parser.add_argument("-a", "--alpha", action="store",dest="alpha",type=float,
+                    help="transparency of bars")
  
     args = parser.parse_args()
 
     plot_histogram(filenames=args.filenames, varnames=args.varnames, outfile=args.outfile, 
                    coordsfilenames=args.coordsfilenames, grid=args.grid,legend=args.legend,
                    logy=args.logy, rec=args.rec, nbins=args.nbins, fieldlabel=args.fieldlabel,
-                   xmin=args.xmin, xmax=args.xmax, ymin=args.ymin, ymax=args.ymax, 
+                   xmin=args.xmin, xmax=args.xmax, ymin=args.ymin, ymax=args.ymax, alpha=args.alpha,
                    scientific=args.scientific, printvalues=args.printvalues, title=args.title)
