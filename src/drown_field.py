@@ -13,7 +13,7 @@ import xarray as xr
 import numpy as np
 import re
 
-def drown_field(file_in=None, file_out=None, varnames=None, vert_fill=None,
+def drown_field(file_in=None, file_out=None, varnames=None, vert_fill=None, fill_check=None,
                 niter=None, min_points=None, new_mask_file=None, new_mask_name=None):
 
     if niter is None:
@@ -57,7 +57,9 @@ def drown_field(file_in=None, file_out=None, varnames=None, vert_fill=None,
         with xr.open_dataset(new_mask_file) as new_mask_in:
             new_mask = getattr(new_mask_in,new_mask_name)
 
+    n_unfilled_all_fields = 0
     for field in fields:
+        print("Drowning ",field.name)
         drowned_field = field
         if vert_fill:
             # just fill in from points immediately above
@@ -72,6 +74,7 @@ def drown_field(file_in=None, file_out=None, varnames=None, vert_fill=None,
             # do horizontal averaging of neighbouring non-NaN points
             nn = 0
             while nn < niter:
+                print("iteration ",nn)
                 nn += 1
                 field_zeros = xr.where( np.isnan(drowned_field), 0.0, drowned_field)
                 field_n = np.roll(field_zeros.values,shift=-1,axis=-2)
@@ -93,25 +96,30 @@ def drown_field(file_in=None, file_out=None, varnames=None, vert_fill=None,
                 drowned_field.values = xr.where( np.isnan(drowned_field.values) & (weights > min_points-1),
                             ( field_n  + field_s  + field_e  + field_w +
                               field_nw + field_ne + field_sw + field_se ) / weights, drowned_field)
+                if new_mask is None:
+                    n_unfilled = np.count_nonzero( np.isnan(drowned_field.values) )
+                else:
+                    n_unfilled = np.count_nonzero( ( np.isnan(drowned_field.values) & new_mask == 1 ) )
+                if n_unfilled == 0:
+                    # everything filled in; we can stop the iteration
+                    break
+
+        print("Number of unfilled points for field ",field.name," is ",n_unfilled," after ",nn," iterations.")
+        n_unfilled_all_fields += n_unfilled
 
         if field.name == fields[0].name:
             outdata = drowned_field.to_dataset()    
         else:
             outdata[field.name] = drowned_field
 
-    if new_mask is not None:
-        n_fail = np.count_nonzero( (np.isnan(drowned_field[0].values) & new_mask == 1) )
-        if n_fail > 0:
-            print(n_fail," NaN points at sea point in new mask.")
-            print(np.where( (np.isnan(drowned_field[0].values) & new_mask == 1) ))
-        else:
-            print("No more NaNs at sea points in new mask.")
-
     if nav_lat is not None and nav_lon is not None:
         outdata.update({'nav_lat':nav_lon ,
                         'nav_lat':nav_lon })
 
     print('timedimname: ',timedimname)
+    if fill_check and n_unfilled_all_fields != 0: 
+        # label file that hasn't been fully filled
+        file_out = ".".join(file_out.split(".")[:-1])+"_unfilled.nc"
     if timedim is not None:
         outdata.to_netcdf(file_out,unlimited_dims=timedimname)
     else:
@@ -133,6 +141,8 @@ if __name__=="__main__":
                          help="number of iterations - default 10")
     parser.add_argument("-m", "--min_points", action="store",dest="min_points",type=int,
                          help="minimum number of nonland neighbours for filling to occur - default 1")
+    parser.add_argument("-F", "--fill_check", action="store_true",dest="fill_check",
+                         help="label output file if filling not complete")
     parser.add_argument("-K", "--new_mask_file", action="store",dest="new_mask_file",
                          help="name of file with new mask to check drowned field against")
     parser.add_argument("-k", "--new_mask_name", action="store",dest="new_mask_name",
@@ -142,5 +152,5 @@ if __name__=="__main__":
 
     drown_field(file_in=args.file_in,file_out=args.file_out,varnames=args.varnames,vert_fill=args.vert_fill,
                 niter=args.niter,min_points=args.min_points, new_mask_file=args.new_mask_file,
-                new_mask_name=args.new_mask_name )
+                new_mask_name=args.new_mask_name, fill_check=args.fill_check )
 

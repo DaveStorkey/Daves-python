@@ -25,8 +25,8 @@ def closea_fill(mesh_file=None, closea_file=None, outfile=None, lakes_to_fill=No
         gphif = mesh_data.gphif
         tmask = mesh_data.tmask
 
+    # Note this bit will work even if tmask is 2D.
     tmask_dummy,closea_mask3d = xr.broadcast(tmask,closea_mask)
-
     print('tmask.shape:',tmask.shape)
     print('closea_mask3d.shape:',closea_mask3d.shape)
 

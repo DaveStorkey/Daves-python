@@ -25,7 +25,7 @@ def presplit(infile=None, outfile=None, nsplit=None, extra_cols=None, split_dim=
     dataset_in = xr.open_dataset(infile)
     dimlen = dataset_in.dims[split_dim]
     splitlens = np.zeros(nsplit).astype(int)
-    splitlens[:] = np.int(dimlen/nsplit)
+    splitlens[:] = int(dimlen/nsplit)
     splitlens[:dimlen%nsplit] += 1
 
     start = 0
@@ -38,10 +38,11 @@ def presplit(infile=None, outfile=None, nsplit=None, extra_cols=None, split_dim=
             xslice = slice(start-extra_cols,end)
         indexer = {split_dim:xslice}
         dataset_out = dataset_in.isel(indexers=indexer)
+        endm1=end-1
         if start == 0 or extra_cols == 0:
-            dataset_out.to_netcdf(f"{outfile}_{start}_{end-1}.nc")
+            dataset_out.to_netcdf(f"{outfile}_{start:04}_{endm1:04}.nc")
         else:
-            dataset_out.to_netcdf(f"{outfile}_{start}_{end-1}_X{extra_cols}.nc")
+            dataset_out.to_netcdf(f"{outfile}_{start:04}_{endm1:04}_X{extra_cols}.nc")
         start += splitlen
 
 if __name__=="__main__":
