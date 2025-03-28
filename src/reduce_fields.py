@@ -9,6 +9,7 @@ Wrapper to make it easy to call cube.collapsed from the command line.
 
 import iris
 import iris.analysis
+import numpy.ma as ma
 
 def read_cube(filename,fieldname):
     '''
@@ -49,9 +50,67 @@ def get_weights(wgtsfile,wgtsname,cube):
     
     return wgts
 
+def mask_subdomain(cube,west=None,east=None,south=None,north=None,bottom=None,top=None):
+    '''
+    Select subdomain:
+    1. For 1D coordinates use cube.extract to subset the cube.
+    2. For 2D auxillary coordinates, mask points outside of the subdomain.
+    '''
+    
+    if len(cube.coord("longitude").points.shape) > 1:
+        # lats/lons as 2D auxillary coordinates
+        ones_array = ma.ones(cube.data.shape)
+        if west is not None or east is not None:
+            lons = cube.coord("longitude").points * ones_array
+        if south is not None or north is not None:
+            lats = cube.coord("latitude").points * ones_array
+    else:
+        lons = None
+        lats = None
+            
+    if bottom is not None or top is not None:
+        try:
+            depths = cube.coord("depth").points
+        except(iris.exceptions.CoordinateNotFoundError):
+            raise Exception("Could not find depth coordinate for cube ",cube.var_name,
+                            ". Set standard_name='depth' for depth coordinate.")
+        
+    if west is not None:
+        if lons is None:
+            longitude_constraint = iris.Constraint(longitude=lambda cell: cell > west)
+            cube = cube.extract(longitude_constraint)
+        else:
+            cube.data[:] = ma.masked_where(lons < west, cube.data[:])
+    if east is not None:
+        if lons is None:
+            longitude_constraint = iris.Constraint(longitude=lambda cell: cell < east)
+            cube = cube.extract(longitude_constraint)
+        else:
+            cube.data[:] = ma.masked_where(lons < west, cube.data[:])
+    if south is not None:
+        if lats is None:
+            latitude_constraint = iris.Constraint(latitude=lambda cell: cell > south)
+            cube = cube.extract(latitude_constraint)
+        else:
+            cube.data[:] = ma.masked_where(lons < west, cube.data[:])
+    if north is not None:
+        if lats is None:
+            latitude_constraint = iris.Constraint(latitude=lambda cell: cell < north)
+            cube = cube.extract(latitude_constraint)
+        else:
+            cube.data[:] = ma.masked_where(lons < west, cube.data[:])
+    if bottom is not None:
+        depth_constraint = iris.Constraint(depth=lambda cell: cell < bottom)
+        cube = cube.extract(depth_constraint)
+    if top is not None:
+        depth_constraint = iris.Constraint(depth=lambda cell: cell > top)
+        cube = cube.extract(depth_constraint)
+
+    return cube
+        
 def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=None,
                   aggr=None,outfile=None,east=None,west=None,south=None,north=None,
-                  top=None,bottom=None):
+                  top=None,bottom=None,maskout=None):
 
     aggregators = { "mean"     :  iris.analysis.MEAN ,
                     "min"      :  iris.analysis.MIN  ,
@@ -64,12 +123,19 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
         aggr="mean"
 
     if outfile is None:
-        outfile=infile.split(".")[:-1]+"_reduced."+infile.split(".")[-1]
+        outfile=".".join(infile.split(".")[:-1])+"_reduced."+infile.split(".")[-1]
 
     if invars is None:
         cubes = iris.load(infile)
     else:
         cubes = [read_cube(infile,varname) for varname in invars]
+        
+    if any([arg is not None for arg in [east,west,south,north,top,bottom]]):
+        cubes = [mask_subdomain(cube,east=east,west=west,south=south,north=north,top=top,bottom=bottom) \
+                   for cube in cubes]
+        if maskout:
+            masked_file=".".join(infile.split(".")[:-1])+"_masked_subdomain."+infile.split(".")[-1]
+            iris.save(cubes,masked_file)
         
     if coords is None:
         coords = "time"
@@ -88,12 +154,13 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
         if len(wgtsfiles) != len(wgtsnames):
             raise Exception("Must specify one weights file or the same number as the number of weights fields")
         if len(wgtsfiles) > 1 and wgtsfiles[0] == "measures":
-            # multiply won't work with a CellMeasure object as the first argument
+            # iris.analysis.maths.multiply won't work with a CellMeasure object as the first argument
+            # so move it to be the last argument
             wgtsfiles.append(wgtsfiles.pop(0))
             wgtsnames.append(wgtsnames.pop(0))
         wgts_list = [get_weights(wgtsfile,wgtsname,cubes[0]) for (wgtsfile,wgtsname) in zip(wgtsfiles,wgtsnames)]
         wgts=wgts_list[0]        
-        if len(wgtsnames) > 1:
+        if len(wgts_list) > 1:
             for wgts_to_multiply in wgts_list[1:]:
                 wgts = iris.analysis.maths.multiply(wgts, wgts_to_multiply, in_place=True)
     else:
@@ -121,24 +188,26 @@ if __name__=="__main__":
                          help="name of coordinates to reduce over (default time)")
     parser.add_argument("-A", "--aggr", action="store",dest="aggr",
                          help="name of aggregator: mean, max, min")
-    parser.add_argument("-W", "--west", action="store",dest="west",
+    parser.add_argument("-W", "--west", action="store",dest="west",type=float,
                          help="western limit of area to reduce")
-    parser.add_argument("-E", "--east", action="store",dest="east",
+    parser.add_argument("-E", "--east", action="store",dest="east",type=float,
                          help="eastern limit of area to reduce")
-    parser.add_argument("-S", "--south", action="store",dest="south",
+    parser.add_argument("-S", "--south", action="store",dest="south",type=float,
                          help="southern limit of area to reduce")
-    parser.add_argument("-N", "--north", action="store",dest="north",
+    parser.add_argument("-N", "--north", action="store",dest="north",type=float,
                          help="northern limit of area to reduce")
-    parser.add_argument("-T", "--top", action="store",dest="top",
+    parser.add_argument("-T", "--top", action="store",dest="top",type=float,
                          help="top limit of volume to reduce")
-    parser.add_argument("-B", "--bottom", action="store",dest="bottom",
+    parser.add_argument("-B", "--bottom", action="store",dest="bottom",type=float,
                          help="bottom limit of volume to reduce")
+    parser.add_argument("-M", "--maskout", action="store_true",dest="maskout",
+                         help="output fields with subdomain masked")
     args = parser.parse_args()
 
     reduce_fields(infile=args.infile,invars=args.invars,outfile=args.outfile,
                   wgtsfiles=args.wgtsfiles,wgtsnames=args.wgtsnames,coords=args.coords,aggr=args.aggr,
                   south=args.south,north=args.north,west=args.west,east=args.east,
-                  top=args.top,bottom=args.bottom)
+                  top=args.top,bottom=args.bottom,maskout=args.maskout)
 
 
 
