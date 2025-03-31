@@ -193,9 +193,9 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
         if len(wgts_list) > 1:
             for wgts_to_multiply in wgts_list[1:]:
                 wgts = iris.analysis.maths.multiply(wgts, wgts_to_multiply, in_place=True)
-        elif type(wgts) is iris.coords.CellMeasure:
+        elif wgtsfiles[0] == "measures":
             # in this case, broadcast the weights to be the same shape as the cube... 
-            wgts = iris.analysis.maths.multiply(wgts, ma.ones(cubes[0].shape), in_place=True)
+            wgts = ma.ones(cubes[0].shape)[:] * wgts[:]
         # Apply same subdomain extraction to the weights as we did to the field.
         # Note don't need to apply masking because a masked point multiplied by an unmasked point
         # is a masked point.
