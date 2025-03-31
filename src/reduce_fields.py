@@ -14,18 +14,22 @@ import numpy.ma as ma
 def read_cube(filename,fieldname):
     '''
     Read a variable from a netcdf file as an Iris cube.
-    Try matching varname to the standard_name first and if that fails
-    try matching to the variable name in the file. 
+    Try to match name to standard_name, long_name or var_name
     '''
 
-    try:
-        cube = iris.load_cube(filename, fieldname)
-    except iris.exceptions.ConstraintMismatchError:
-        try: 
-            cube = iris.load_cube(filename,
-                      iris.Constraint(cube_func=lambda nemoname: nemoname.var_name == fieldname))
+    constraints = [ iris.NameConstraint(standard_name=fieldname),
+                    iris.NameConstraint(long_name=fieldname),
+                    iris.NameConstraint(var_name=fieldname) ]
+
+    for constraint in constraints:
+        try:
+            cube = iris.load_cube(filename, constraint)
         except iris.exceptions.ConstraintMismatchError:
-            raise Exception('Could not find '+fieldname+' in file '+filename)
+            pass
+        else:
+            break
+    else:
+        raise Exception("Could not find field ",fieldname," in file ",filename)
 
     return cube
 
@@ -50,67 +54,79 @@ def get_weights(wgtsfile,wgtsname,cube):
     
     return wgts
 
-def mask_subdomain(cube,west=None,east=None,south=None,north=None,bottom=None,top=None):
+def get_subdomain(cubes,west=None,east=None,south=None,north=None,bottom=None,top=None):
     '''
     Select subdomain:
     1. For 1D coordinates use cube.extract to subset the cube.
     2. For 2D auxillary coordinates, mask points outside of the subdomain.
     '''
     
-    if len(cube.coord("longitude").points.shape) > 1:
+    constraints=[]
+    
+    if len(cubes[0].coord("longitude").points.shape) > 1:
         # lats/lons as 2D auxillary coordinates
-        ones_array = ma.ones(cube.data.shape)
+        ones_array = ma.ones(cubes[0].data.shape)
         if west is not None or east is not None:
-            lons = cube.coord("longitude").points * ones_array
+            lons = cubes[0].coord("longitude").points * ones_array
         if south is not None or north is not None:
-            lats = cube.coord("latitude").points * ones_array
+            lats = cubes[0].coord("latitude").points * ones_array
     else:
         lons = None
         lats = None
             
     if bottom is not None or top is not None:
         try:
-            depths = cube.coord("depth").points
+            depths = cubes[0].coord("depth").points
         except(iris.exceptions.CoordinateNotFoundError):
-            raise Exception("Could not find depth coordinate for cube ",cube.var_name,
+            raise Exception("Could not find depth coordinate for cube ",cubes[0].var_name,
                             ". Set standard_name='depth' for depth coordinate.")
         
     if west is not None:
         if lons is None:
             longitude_constraint = iris.Constraint(longitude=lambda cell: cell > west)
-            cube = cube.extract(longitude_constraint)
+            cubes = [cube.extract(longitude_constraint) for cube in cubes]
+            constraints.append(longitude_constraint)
         else:
-            cube.data[:] = ma.masked_where(lons < west, cube.data[:])
+            for cube in cubes:
+                cube.data[:] = ma.masked_where(lons < west, cube.data[:])
     if east is not None:
         if lons is None:
             longitude_constraint = iris.Constraint(longitude=lambda cell: cell < east)
-            cube = cube.extract(longitude_constraint)
+            cubes = [cube.extract(longitude_constraint) for cube in cubes]
+            constraints.append(longitude_constraint)
         else:
-            cube.data[:] = ma.masked_where(lons < west, cube.data[:])
+            for cube in cubes:
+                cube.data[:] = ma.masked_where(lons > east, cube.data[:])
     if south is not None:
         if lats is None:
             latitude_constraint = iris.Constraint(latitude=lambda cell: cell > south)
-            cube = cube.extract(latitude_constraint)
+            cubes = [cube.extract(latitude_constraint) for cube in cubes]
+            constraints.append(latitude_constraint)
         else:
-            cube.data[:] = ma.masked_where(lons < west, cube.data[:])
+            for cube in cubes:
+                cube.data[:] = ma.masked_where(lats < south, cube.data[:])
     if north is not None:
         if lats is None:
             latitude_constraint = iris.Constraint(latitude=lambda cell: cell < north)
-            cube = cube.extract(latitude_constraint)
+            cubes = [cube.extract(latitude_constraint) for cube in cubes]
+            constraints.append(latitude_constraint)
         else:
-            cube.data[:] = ma.masked_where(lons < west, cube.data[:])
+            for cube in cubes:
+                cube.data[:] = ma.masked_where(lats > north, cube.data[:])
     if bottom is not None:
         depth_constraint = iris.Constraint(depth=lambda cell: cell < bottom)
-        cube = cube.extract(depth_constraint)
+        cubes = [cube.extract(depth_constraint) for cube in cubes]
+        constraints.append(depth_constraint)
     if top is not None:
         depth_constraint = iris.Constraint(depth=lambda cell: cell > top)
-        cube = cube.extract(depth_constraint)
+        cubes = [cube.extract(depth_constraint) for cube in cubes]
+        constraints.append(depth_constraint)
 
-    return cube
+    return cubes, constraints
         
 def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=None,
                   aggr=None,outfile=None,east=None,west=None,south=None,north=None,
-                  top=None,bottom=None,maskout=None):
+                  top=None,bottom=None,subout=None):
 
     aggregators = { "mean"     :  iris.analysis.MEAN ,
                     "min"      :  iris.analysis.MIN  ,
@@ -130,12 +146,13 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
     else:
         cubes = [read_cube(infile,varname) for varname in invars]
         
+    constraints=[]
     if any([arg is not None for arg in [east,west,south,north,top,bottom]]):
-        cubes = [mask_subdomain(cube,east=east,west=west,south=south,north=north,top=top,bottom=bottom) \
-                   for cube in cubes]
-        if maskout:
-            masked_file=".".join(infile.split(".")[:-1])+"_masked_subdomain."+infile.split(".")[-1]
-            iris.save(cubes,masked_file)
+        cubes, constraints = get_subdomain(cubes,east=east,west=west,south=south,north=north,
+                                top=top,bottom=bottom)
+        if subout:
+            subdomain_file=".".join(infile.split(".")[:-1])+"_subdomain."+infile.split(".")[-1]
+            iris.save(cubes,subdomain_file)
         
     if coords is None:
         coords = "time"
@@ -163,6 +180,12 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
         if len(wgts_list) > 1:
             for wgts_to_multiply in wgts_list[1:]:
                 wgts = iris.analysis.maths.multiply(wgts, wgts_to_multiply, in_place=True)
+        # Apply same subdomain extraction to the weights as we did to the field.
+        # Note don't need to apply masking because a masked point multiplied by an unmasked point
+        # is a masked point.
+        if len(constraints) > 0:
+            for constraint in constraints:
+                wgts = wgts.extract(constraint)
     else:
         wgts = None
                 
@@ -200,14 +223,14 @@ if __name__=="__main__":
                          help="top limit of volume to reduce")
     parser.add_argument("-B", "--bottom", action="store",dest="bottom",type=float,
                          help="bottom limit of volume to reduce")
-    parser.add_argument("-M", "--maskout", action="store_true",dest="maskout",
-                         help="output fields with subdomain masked")
+    parser.add_argument("-M", "--subout", action="store_true",dest="subout",
+                         help="output fields on subdomain to file as sanity check")
     args = parser.parse_args()
 
     reduce_fields(infile=args.infile,invars=args.invars,outfile=args.outfile,
                   wgtsfiles=args.wgtsfiles,wgtsnames=args.wgtsnames,coords=args.coords,aggr=args.aggr,
                   south=args.south,north=args.north,west=args.west,east=args.east,
-                  top=args.top,bottom=args.bottom,maskout=args.maskout)
+                  top=args.top,bottom=args.bottom,subout=args.subout)
 
 
 
