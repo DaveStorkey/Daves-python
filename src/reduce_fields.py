@@ -130,6 +130,9 @@ def get_subdomain(cubes,west=None,east=None,south=None,north=None,bottom=None,to
         cubes = [cube.extract(depth_constraint) for cube in cubes]
         constraints.append(depth_constraint)
 
+    if cubes[0] is None:
+        raise Exception("Subdomain extraction resulted in a null cube. Check your box limits and try again.")
+
     return cubes, constraints
         
 def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=None,
@@ -154,6 +157,8 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
     else:
         cubes = [read_cube(infile,varname) for varname in invars]
         
+    print("cubes read in : ",[cube.var_name for cube in cubes])
+
     constraints=[]
     if any([arg is not None for arg in [east,west,south,north,top,bottom]]):
         cubes, constraints = get_subdomain(cubes,east=east,west=west,south=south,north=north,
@@ -164,7 +169,7 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
         
     if coords is None:
         coords = "time"
-
+        
     if wgtsnames is not None:
         if not isinstance(wgtsnames,list):
             wgtsnames=[wgtsnames]
@@ -188,12 +193,17 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
         if len(wgts_list) > 1:
             for wgts_to_multiply in wgts_list[1:]:
                 wgts = iris.analysis.maths.multiply(wgts, wgts_to_multiply, in_place=True)
+        elif type(wgts) is iris.coords.CellMeasure:
+            # in this case, broadcast the weights to be the same shape as the cube... 
+            wgts = iris.analysis.maths.multiply(wgts, ma.ones(cubes[0].shape), in_place=True)
         # Apply same subdomain extraction to the weights as we did to the field.
         # Note don't need to apply masking because a masked point multiplied by an unmasked point
         # is a masked point.
         if len(constraints) > 0:
             for constraint in constraints:
-                wgts = wgts.extract(constraint)
+                if type(wgts) is iris.cube.Cube:
+                    # only apply the contraints to the cube weights, not the "measures" weights
+                    wgts = wgts.extract(constraint)
     else:
         wgts = None
                 
