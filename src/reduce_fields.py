@@ -9,12 +9,14 @@ Wrapper to make it easy to call cube.collapsed from the command line.
 
 import iris
 import iris.analysis
+import iris.util
 import numpy.ma as ma
 
 def read_cube(filename,fieldname):
     '''
     Read a variable from a netcdf file as an Iris cube.
     Try to match name to standard_name, long_name or var_name
+    Remove duplicate time dimension if necessary.
     '''
 
     constraints = [ iris.NameConstraint(standard_name=fieldname),
@@ -30,6 +32,12 @@ def read_cube(filename,fieldname):
             break
     else:
         raise Exception("Could not find field ",fieldname," in file ",filename)
+
+    for coord in cube.coords(dim_coords=True):
+        if coord.var_name == "time_counter":
+            cube.remove_coord(coord)
+            iris.util.promote_aux_coord_to_dim_coord(cube,"time")
+            break
 
     return cube
 
@@ -189,7 +197,11 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
     else:
         wgts = None
                 
-    cubes_reduced=[cube.collapsed(coords, aggregators[aggr], weights=wgts) for cube in cubes]
+    if aggr in ["min","max"]:
+        # no weights keyword
+        cubes_reduced=[cube.collapsed(coords, aggregators[aggr]) for cube in cubes]
+    else:
+        cubes_reduced=[cube.collapsed(coords, aggregators[aggr], weights=wgts) for cube in cubes]
 
     iris.save(cubes_reduced, outfile)
 
