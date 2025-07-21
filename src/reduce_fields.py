@@ -137,9 +137,10 @@ def get_subdomain(cubes,west=None,east=None,south=None,north=None,bottom=None,to
         
 def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=None,
                   aggr=None,outfile=None,east=None,west=None,south=None,north=None,
-                  top=None,bottom=None,subout=None):
+                  top=None,bottom=None,subout=None,norm=None,factor=None):
 
     aggregators = { "mean"     :  iris.analysis.MEAN ,
+                    "sum"      :  iris.analysis.SUM  ,
                     "min"      :  iris.analysis.MIN  ,
                     "max"      :  iris.analysis.MAX    }
 
@@ -157,8 +158,14 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
     else:
         cubes = [read_cube(infile,varname) for varname in invars]
         
-    print("cubes read in : ",[cube.var_name for cube in cubes])
+    if norm and wgtsnames is not None:
+        print("Adding a norm cube")
+        cubes.append(cubes[0].copy())
+        cubes[-1].var_name="norm"
+        cubes[-1].data[:] = 1.0
 
+    print("cubes to reduce : ",[cube.var_name for cube in cubes])
+    
     constraints=[]
     if any([arg is not None for arg in [east,west,south,north,top,bottom]]):
         cubes, constraints = get_subdomain(cubes,east=east,west=west,south=south,north=north,
@@ -170,6 +177,9 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
     if coords is None:
         coords = "time"
         
+    if factor is None:
+        factor = 1.0
+
     if wgtsnames is not None:
         if not isinstance(wgtsnames,list):
             wgtsnames=[wgtsnames]
@@ -209,9 +219,9 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
                 
     if aggr in ["min","max"]:
         # no weights keyword
-        cubes_reduced=[cube.collapsed(coords, aggregators[aggr]) for cube in cubes]
+        cubes_reduced=[factor * cube.collapsed(coords, aggregators[aggr]) for cube in cubes]
     else:
-        cubes_reduced=[cube.collapsed(coords, aggregators[aggr], weights=wgts) for cube in cubes]
+        cubes_reduced=[factor * cube.collapsed(coords, aggregators[aggr], weights=wgts) for cube in cubes]
 
     iris.save(cubes_reduced, outfile)
 
@@ -247,12 +257,16 @@ if __name__=="__main__":
                          help="bottom limit of volume to reduce")
     parser.add_argument("-M", "--subout", action="store_true",dest="subout",
                          help="output fields on subdomain to file as sanity check")
+    parser.add_argument("--norm", action="store_true",dest="norm",
+                         help="output norm - reduction applied to weights alone")
+    parser.add_argument("-f", "--factor", action="store",dest="factor",type=float,
+                         help="scalar factor to multiply the result by")
     args = parser.parse_args()
 
     reduce_fields(infile=args.infile,invars=args.invars,outfile=args.outfile,
                   wgtsfiles=args.wgtsfiles,wgtsnames=args.wgtsnames,coords=args.coords,aggr=args.aggr,
                   south=args.south,north=args.north,west=args.west,east=args.east,
-                  top=args.top,bottom=args.bottom,subout=args.subout)
+                  top=args.top,bottom=args.bottom,subout=args.subout,norm=args.norm,factor=args.factor)
 
 
 
