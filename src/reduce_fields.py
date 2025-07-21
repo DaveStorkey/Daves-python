@@ -157,12 +157,18 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
         cubes = iris.load(infile)
     else:
         cubes = [read_cube(infile,varname) for varname in invars]
-        
+    # save the input fill_value attribute so that we can force the output fields
+    # to use the same value.
+    fill_value=cubes[0].data.fill_value    
+
     if norm and wgtsnames is not None:
         print("Adding a norm cube")
         cubes.append(cubes[0].copy())
         cubes[-1].var_name="norm"
         cubes[-1].data[:] = 1.0
+        # this line necessary because setting a value at a point automatically unmasks it
+        # so we need to apply the original mask again...
+        cubes[-1].data.mask = cubes[0].data.mask
 
     print("cubes to reduce : ",[cube.var_name for cube in cubes])
     
@@ -223,8 +229,7 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
     else:
         cubes_reduced=[factor * cube.collapsed(coords, aggregators[aggr], weights=wgts) for cube in cubes]
 
-    iris.save(cubes_reduced, outfile)
-
+    iris.save(cubes_reduced, outfile, fill_value=fill_value)
 
 if __name__=="__main__":
     import argparse
