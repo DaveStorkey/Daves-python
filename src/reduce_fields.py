@@ -34,7 +34,7 @@ def read_cube(filename,fieldname):
         raise Exception("Could not find field ",fieldname," in file ",filename)
 
     for coord in cube.coords(dim_coords=True):
-        if coord.var_name == "time_counter":
+        if coord.var_name == "time_counter" and "time_centered" in [coord.var_name for coord in cube.coords()]:
             cube.remove_coord(coord)
             iris.util.promote_aux_coord_to_dim_coord(cube,"time")
             break
@@ -229,6 +229,10 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
     else:
         cubes_reduced=[factor * cube.collapsed(coords, aggregators[aggr], weights=wgts) for cube in cubes]
 
+    for cube,cube_reduced in zip(cubes,cubes_reduced):
+        if cube_reduced.var_name is None:
+            cube_reduced.var_name = cube.var_name
+        
     iris.save(cubes_reduced, outfile, fill_value=fill_value)
 
 if __name__=="__main__":
