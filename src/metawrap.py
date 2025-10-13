@@ -41,7 +41,7 @@ def read_cube(filename,fieldname):
 
     return cube
 
-def metawrap(infile=None,invars=None,metafile=None,metavars=None,outfile=None):
+def metawrap(infile=None,invars=None,metafile=None,metavars=None,outfile=None,maskfields=None,thick=None):
 
     if infile is None:
         raise Exception("Error: must specify input file")
@@ -72,7 +72,14 @@ def metawrap(infile=None,invars=None,metafile=None,metavars=None,outfile=None):
         cubes_meta.append(read_cube(metafile,var))
 
     for cube_in, cube_meta in zip(cubes_in, cubes_meta):
+        if maskfields:
+            mask = cube_meta.data.mask.copy()
         cube_meta.data[:] = cube_in.data[:]
+        if maskfields:
+            cube_meta.data.mask[:] = mask[:]
+        
+    if thick:
+        cubes_meta.append(read_cube(metafile,"cell_thickness"))
         
     iris.save(cubes_meta, outfile, fill_value=fill_value)
 
@@ -89,10 +96,15 @@ if __name__=="__main__":
                          help="names of variables with meta data")
     parser.add_argument("-o", "--outfile", action="store", dest="outfile",
                          help="name of output file (format by extension)")
+    parser.add_argument("-K", "--mask", action="store_true", dest="maskfields",
+                         help="apply mask from meta field to input field")
+    parser.add_argument("-T", "--thick", action="store_true", dest="thick",
+                         help="write thickness field from meta file to output file")
     args = parser.parse_args()
 
     metawrap(infile=args.infile,invars=args.invars,outfile=args.outfile,
-             metafile=args.metafile,metavars=args.metavars)
+             metafile=args.metafile,metavars=args.metavars,maskfields=args.maskfields,
+             thick=args.thick)
 
 
 
