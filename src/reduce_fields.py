@@ -10,9 +10,10 @@ Wrapper to make it easy to call cube.collapsed from the command line.
 import iris
 import iris.analysis
 import iris.util
+import numpy as np
 import numpy.ma as ma
 
-def read_cube(filename,fieldname):
+def read_cube(filename,fieldname,remove_time=None):
     '''
     Read a variable from a netcdf file as an Iris cube.
     Try to match name to standard_name, long_name or var_name
@@ -33,11 +34,17 @@ def read_cube(filename,fieldname):
     else:
         raise Exception("Could not find field ",fieldname," in file ",filename)
 
-    for coord in cube.coords(dim_coords=True):
-        if coord.var_name == "time_counter" and "time_centered" in [coord.var_name for coord in cube.coords()]:
-            cube.remove_coord(coord)
-            iris.util.promote_aux_coord_to_dim_coord(cube,"time")
-            break
+
+    if remove_time:
+        for coord in cube.coords():
+            if "time" in coord.var_name:
+                cube.remove_coord(coord)
+    else:                
+        for coord in cube.coords(dim_coords=True):
+            if coord.var_name == "time_counter" and "time_centered" in [coord.var_name for coord in cube.coords()]:
+                cube.remove_coord(coord)
+                iris.util.promote_aux_coord_to_dim_coord(cube,"time")
+                break
 
     return cube
 
@@ -58,7 +65,8 @@ def get_weights(wgtsfile,wgtsname,cube):
         else:
             raise Exception("Could not find "+wgtsname+" in cell measures of "+cube.var_name)
     else:
-        wgts = read_cube(wgtsfile,wgtsname)
+        # get rid of any degenerate time dimension in the weights file
+        wgts = read_cube(wgtsfile,wgtsname,remove_time=True)
     
     return wgts
 
@@ -223,6 +231,8 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
     else:
         wgts = None
                 
+    print("cubes[0].shape : ",cubes[0].shape)
+    print("wgts.shape : ", wgts.shape)
     if aggr in ["min","max"]:
         # no weights keyword
         cubes_reduced=[factor * cube.collapsed(coords, aggregators[aggr]) for cube in cubes]
