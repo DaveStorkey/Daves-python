@@ -19,7 +19,10 @@ import netCDF4 as nc
 import numpy as np
 import numpy.ma as ma
 
-def get_fields(infile=None, varnames=None, mask=None ):
+def get_fields(infile=None, varnames=None, masks=None ):
+
+    if masks is None:
+        masks=[None]
 
     fields_out=[]
     with nc.Dataset(infile,'r') as indata:
@@ -29,25 +32,26 @@ def get_fields(infile=None, varnames=None, mask=None ):
                 break
         else:
             tdim=False
-        for varname in varnames:
-            fields_in=[]
-            vars_to_read=varname.split("+")
-            for var in vars_to_read:
-                if tdim:
-                    # take the first record if there's a time dimension
-                    fields_in.append(indata.variables[var][0][:])
+        for mask in masks:
+            for varname in varnames:
+                fields_in=[]
+                vars_to_read=varname.split("+")
+                for var in vars_to_read:
+                    if tdim:
+                        # take the first record if there's a time dimension
+                        fields_in.append(indata.variables[var][0][:])
+                    else:
+                        fields_in.append(indata.variables[var][:])
+                    if mask is not None:
+                        fields_in[-1].mask = mask
+                if len(fields_in) > 1:
+                    fields_out.append( ma.concatenate((fields_in)) )
                 else:
-                    fields_in.append(indata.variables[var][:])
-                if mask is not None:
-                    fields_in[-1].mask = mask
-            if len(fields_in) > 1:
-                fields_out.append( ma.concatenate((fields_in)) )
-            else:
-                fields_out.append( fields_in[0] )
+                    fields_out.append( fields_in[0] )
     return fields_out
 
 
-def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=None, maskname=None,
+def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=None, masknames=None,
                     invert_mask=None, end_file_in=None, file_out_stem=None):
 
     if files_in is None:
@@ -60,21 +64,29 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
         
     if varnames is None:
         raise Exception("Error : must specify at least one variable (varnames)")
-        
-    mask=None
+    else:
+        nvar=len(varnames)
+    
     if maskfilename is not None:
-        if maskname is None:
-            maskname="tmask"
+        if masknames is None:
+            masknames=["tmask"]
+        elif type(masknames) is not list:
+            masknames=[masknames]
+        masks=[]
         with nc.Dataset(maskfilename,'r') as maskfile:
-            mask = maskfile.variables[maskname][:]
-        if invert_mask:
-            if type(mask[0]) is np.bool_:
-                mask[:] = ~mask[:]
-            else:
-                mask[:] = 1 - mask[:]
-
+            for maskname in masknames:
+                masks.append(maskfile.variables[maskname][:])
+                if invert_mask:
+                    if type(masks[-1]) is np.bool_:
+                        masks[-1][:] = ~masks[-1][:]
+                    else:
+                        masks[-1][:] = 1 - masks[-1][:]
+    else:
+        masknames=["global"]
+        masks=[None]
+                
     if end_file_in is not None:
-        endfields = get_fields(infile=end_file_in, varnames=varnames, mask=mask)
+        endfields = get_fields(infile=end_file_in, varnames=varnames, masks=masks)
                 
     if file_out_stem is None:
         file_out_stem="RMS_diffs"
@@ -85,36 +97,43 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
     fields1_prev=None
     for file1, file2 in zip(files_in, files_in2):
         print("Working on file "+file1)
-        fields1 = get_fields(infile=file1, varnames=varnames, mask=mask)
+        fields1 = get_fields(infile=file1, varnames=varnames, masks=masks)
         if fields1_prev is not None:
             fields_diff = [field1-field1_prev for field1,field1_prev in zip(fields1,fields1_prev)]
             rms_seq.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
         fields1_prev = fields1
         if file2 is not None:
-            fields2 = get_fields(infile=file2, varnames=varnames, mask=mask)
+            fields2 = get_fields(infile=file2, varnames=varnames, masks=masks)
             fields_diff = [field2-field1 for field1,field2 in zip(fields1,fields2)]
             rms_pairwise.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
         if end_file_in is not None:
             fields_diff = [field1-endfield for field1,endfield in zip(fields1,endfields)]
             rms_wrt_endpoint.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
 
-    with open(file_out_stem+"_seq.dat","w") as f:
-        f.write(",".join([varname for varname in varnames])+"\n")
-        for rms_out in rms_seq:
-            print("rms_out : ",rms_out)
-            f.write(",".join([str(rms_write) for rms_write in rms_out])+"\n")
+    print("rms_seq : ",rms_seq)
+
+    for ii, maskname in enumerate(masknames):
+        range_to_write=slice(ii*nvar,(ii+1)*nvar)
+        with open(file_out_stem+"_seq_"+maskname+".dat","w") as f:
+            f.write(",".join([varname for varname in varnames])+"\n")
+            for rms_out in rms_seq:
+                f.write(",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
                 
     if files_in2[0] is not None:
-        with open(file_out_stem+"_pairwise.dat","w") as f:
-            f.write(",".join([varname for varname in varnames])+"\n")
-            for rms_out in rms_pairwise:
-                f.write(",".join([str(rms_write) for rms_write in rms_out])+"\n")
+        for ii, maskname in enumerate(masknames):
+            range_to_write=slice(ii*nvar,(ii+1)*nvar)
+            with open(file_out_stem+"_pairwise_"+maskname+".dat","w") as f:
+                f.write(",".join([varname for varname in varnames])+"\n")
+                for rms_out in rms_pairwise:
+                    f.write(",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
                 
     if end_file_in is not None:
-        with open(file_out_stem+"_wrt_endpoint.dat","w") as f:
-            f.write(",".join([varname for varname in varnames])+"\n")
-            for rms_out in rms_wrt_endpoint:
-                f.write(",".join([str(rms_write) for rms_write in rms_out])+"\n")
+        for ii, maskname in enumerate(masknames):
+            range_to_write=slice(ii*nvar,(ii+1)*nvar)
+            with open(file_out_stem+"_wrt_endpoint_"+maskname+".dat","w") as f:
+                f.write(",".join([varname for varname in varnames])+"\n")
+                for rms_out in rms_wrt_endpoint:
+                    f.write(",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
                                     
 if __name__=="__main__":
     import argparse
@@ -127,8 +146,8 @@ if __name__=="__main__":
                          help="name of field(s) to use")
     parser.add_argument("-M", "--maskfilename", action="store",dest="maskfilename",
                     help="name of file containing mask field")
-    parser.add_argument("-m", "--maskname", action="store",dest="maskname",
-                    help="name of mask field")
+    parser.add_argument("-m", "--masknames", action="store",dest="masknames",nargs="+",
+                    help="name(s) of mask field")
     parser.add_argument("-X", "--invert_mask", action="store_true",dest="invert_mask",
                     help="invert the mask field before applying")
     parser.add_argument("-o", "--file_out", action="store",dest="file_out_stem",
@@ -140,4 +159,4 @@ if __name__=="__main__":
 
     calc_rms_series(files_in=args.files_in,files_in2=args.files_in2,varnames=args.varnames,
                   file_out_stem=args.file_out_stem, end_file_in=args.end_file_in,
-                  maskfilename=args.maskfilename, maskname=args.maskname, invert_mask=args.invert_mask)
+                  maskfilename=args.maskfilename, masknames=args.masknames, invert_mask=args.invert_mask)
