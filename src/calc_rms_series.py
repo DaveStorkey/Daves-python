@@ -29,19 +29,22 @@ def get_fields(infile=None, varnames=None, mask=None ):
                 break
         else:
             tdim=False
-        for var in varnames:
-            if tdim:
-                # take the first record if there's a time dimension
-                fields_out.append(indata.variables[var][0][:])
+        for varname in varnames:
+            fields_in=[]
+            vars_to_read=varname.split("+")
+            for var in vars_to_read:
+                if tdim:
+                    # take the first record if there's a time dimension
+                    fields_in.append(indata.variables[var][0][:])
+                else:
+                    fields_in.append(indata.variables[var][:])
+                if mask is not None:
+                    fields_in[-1].mask = mask
+            if len(fields_in) > 1:
+                fields_out.append( ma.concatenate((fields_in)) )
             else:
-                fields_out.append(indata.variables[var][:])
-            if mask is not None:
-                fields_out[-1].mask = mask
-
-    # if only one varname supplied ma.concatenate will flatten the 2D array
-    # to a 1D array otherwise we end up with a single concatenated 2D array.
-    # Either works for calculating the RMS.     
-    return ma.concatenate((fields_out))
+                fields_out.append( fields_in[0] )
+    return fields_out
 
 
 def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=None, maskname=None,
@@ -71,7 +74,7 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
                 mask[:] = 1 - mask[:]
 
     if end_file_in is not None:
-        endfield = get_fields(infile=end_file_in, varnames=varnames, mask=mask)
+        endfields = get_fields(infile=end_file_in, varnames=varnames, mask=mask)
                 
     if file_out_stem is None:
         file_out_stem="RMS_diffs"
@@ -79,36 +82,39 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
     rms_seq=[]
     rms_pairwise=[]
     rms_wrt_endpoint=[]
-    field1_prev=None
+    fields1_prev=None
     for file1, file2 in zip(files_in, files_in2):
         print("Working on file "+file1)
-        field1 = get_fields(infile=file1, varnames=varnames, mask=mask)
-        if field1_prev is not None:
-            field_diff = field1 - field1_prev
-            rms_seq.append( ma.sqrt(ma.mean(field_diff*field_diff)) )
-        field1_prev = field1
+        fields1 = get_fields(infile=file1, varnames=varnames, mask=mask)
+        if fields1_prev is not None:
+            fields_diff = [field1-field1_prev for field1,field1_prev in zip(fields1,fields1_prev)]
+            rms_seq.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
+        fields1_prev = fields1
         if file2 is not None:
-            field2 = get_fields(infile=file2, varnames=varnames, mask=mask)
-            field_diff = field2 - field1
-            rms_pairwise.append( ma.sqrt(ma.mean(field_diff*field_diff)) )
+            fields2 = get_fields(infile=file2, varnames=varnames, mask=mask)
+            fields_diff = [field2-field1 for field1,field2 in zip(fields1,fields2)]
+            rms_pairwise.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
         if end_file_in is not None:
-            field_diff = field1 - endfield
-            rms_wrt_endpoint.append( ma.sqrt(ma.mean(field_diff*field_diff)) )
+            fields_diff = [field1-endfield for field1,endfield in zip(fields1,endfields)]
+            rms_wrt_endpoint.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
 
     with open(file_out_stem+"_seq.dat","w") as f:
+        f.write(",".join([varname for varname in varnames])+"\n")
         for rms_out in rms_seq:
             print("rms_out : ",rms_out)
-            f.write(str(rms_out)+"\n")
+            f.write(",".join([str(rms_write) for rms_write in rms_out])+"\n")
                 
     if files_in2[0] is not None:
         with open(file_out_stem+"_pairwise.dat","w") as f:
+            f.write(",".join([varname for varname in varnames])+"\n")
             for rms_out in rms_pairwise:
-                f.write(str(rms_out)+"\n")
+                f.write(",".join([str(rms_write) for rms_write in rms_out])+"\n")
                 
     if end_file_in is not None:
         with open(file_out_stem+"_wrt_endpoint.dat","w") as f:
+            f.write(",".join([varname for varname in varnames])+"\n")
             for rms_out in rms_wrt_endpoint:
-                f.write(str(rms_out)+"\n")
+                f.write(",".join([str(rms_write) for rms_write in rms_out])+"\n")
                                     
 if __name__=="__main__":
     import argparse
