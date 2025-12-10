@@ -83,6 +83,7 @@ fi
 
 let countchunk=0
 let counttotal=0
+append_option=""
 for file in $(cat $moo_list_file | sed '/^[[:space:]]*$/d' )
 do
     if [[ ${#infilelist2[@]} -ge $((counttotal+1)) ]];then
@@ -121,7 +122,9 @@ do
         if [[ -n "$end_file" ]];then  end_file_option="-e $end_file" ; fi
         echo "filelist : $filelist"
         echo "filelist2 : $filelist2"
-        calc_rms_series.py -i $filelist $filelist2_option -v $varnames $mask_options -o $file_out $end_file_option
+        calc_rms_series.py -i $filelist $filelist2_option -v $varnames $mask_options -o $file_out $end_file_option $append_option
+        # overwrite output files on first call and append on subsequent calls to calc_rms_series.py
+        append_option="-A"
         let countchunk=1
         moofilelist=""
         if [[ "$keep_files" != "true" ]];then

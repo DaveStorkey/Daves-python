@@ -52,7 +52,7 @@ def get_fields(infile=None, varnames=None, masks=None ):
 
 
 def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=None, masknames=None,
-                    invert_mask=None, end_file_in=None, file_out_stem=None):
+                    invert_mask=None, end_file_in=None, file_out_stem=None, append=None):
 
     if files_in is None:
         raise Exception("Error : must specify at least two input files.")
@@ -110,28 +110,34 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
             fields_diff = [field1-endfield for field1,endfield in zip(fields1,endfields)]
             rms_wrt_endpoint.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
 
-    print("rms_seq : ",rms_seq)
+    if append:
+        mode="a"
+    else:
+        mode="w"
 
     for ii, maskname in enumerate(masknames):
         range_to_write=slice(ii*nvar,(ii+1)*nvar)
-        with open(file_out_stem+"_seq_"+maskname+".dat","w") as f:
-            f.write(",".join([varname for varname in varnames])+"\n")
+        with open(file_out_stem+"_seq_"+maskname+".dat",mode) as f:
+            if mode == "w":
+                f.write(",".join([varname for varname in varnames])+"\n")
             for rms_out in rms_seq:
                 f.write(",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
                 
     if files_in2[0] is not None:
         for ii, maskname in enumerate(masknames):
             range_to_write=slice(ii*nvar,(ii+1)*nvar)
-            with open(file_out_stem+"_pairwise_"+maskname+".dat","w") as f:
-                f.write(",".join([varname for varname in varnames])+"\n")
+            with open(file_out_stem+"_pairwise_"+maskname+".dat",mode) as f:
+                if mode == "w":
+                    f.write(",".join([varname for varname in varnames])+"\n")
                 for rms_out in rms_pairwise:
                     f.write(",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
                 
     if end_file_in is not None:
         for ii, maskname in enumerate(masknames):
             range_to_write=slice(ii*nvar,(ii+1)*nvar)
-            with open(file_out_stem+"_wrt_endpoint_"+maskname+".dat","w") as f:
-                f.write(",".join([varname for varname in varnames])+"\n")
+            with open(file_out_stem+"_wrt_endpoint_"+maskname+".dat",mode) as f:
+                if mode == "w":
+                    f.write(",".join([varname for varname in varnames])+"\n")
                 for rms_out in rms_wrt_endpoint:
                     f.write(",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
                                     
@@ -152,11 +158,13 @@ if __name__=="__main__":
                     help="invert the mask field before applying")
     parser.add_argument("-o", "--file_out", action="store",dest="file_out_stem",
                          help="filename stem of output file")
+    parser.add_argument("-A", "--append", action="store_true",dest="append",
+                    help="append data to existing files")
     parser.add_argument("-e", "--end_file_in", action="store",dest="end_file_in",
                          help="input end file")
 
     args = parser.parse_args()
 
     calc_rms_series(files_in=args.files_in,files_in2=args.files_in2,varnames=args.varnames,
-                  file_out_stem=args.file_out_stem, end_file_in=args.end_file_in,
-                  maskfilename=args.maskfilename, masknames=args.masknames, invert_mask=args.invert_mask)
+                    file_out_stem=args.file_out_stem, end_file_in=args.end_file_in, append=args.append,
+                    maskfilename=args.maskfilename, masknames=args.masknames, invert_mask=args.invert_mask)
