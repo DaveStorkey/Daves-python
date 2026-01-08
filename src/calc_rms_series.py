@@ -137,6 +137,8 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
             range_to_write=slice(ii*nvar,(ii+1)*nvar)
             with open(file_out_stem+"_wrt_endpoint_"+maskname+".dat",mode) as f:
                 if mode == "w":
+                    # for the RMS w.r.t. endpoint write the endpoint filename to the .dat file for reference.
+                    f.write(end_file_in+"\n")
                     f.write(",".join([varname for varname in varnames])+"\n")
                 for rms_out in rms_wrt_endpoint:
                     f.write(",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
