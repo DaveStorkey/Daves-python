@@ -91,25 +91,32 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
     if file_out_stem is None:
         file_out_stem="RMS_diffs"
         
+    dates=[]
     rms_seq=[]
     rms_pairwise=[]
     rms_wrt_endpoint=[]
     fields1_prev=None
     for file1, file2 in zip(files_in, files_in2):
         print("Working on file "+file1)
+        # assuming restart file of form RUNID_DATE_...
+        date1 = file1.split("_")[1]
+        dates.append(date1)
         fields1 = get_fields(infile=file1, varnames=varnames, masks=masks)
         if fields1_prev is not None:
             fields_diff = [field1-field1_prev for field1,field1_prev in zip(fields1,fields1_prev)]
             rms_seq.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
         fields1_prev = fields1
         if file2 is not None:
+            date2 = file2.split("_")[1]
+            if date2 != date1:
+                raise Exception("Error : dates in two filelists do not match.")
             fields2 = get_fields(infile=file2, varnames=varnames, masks=masks)
             fields_diff = [field2-field1 for field1,field2 in zip(fields1,fields2)]
             rms_pairwise.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
         if end_file_in is not None:
             fields_diff = [field1-endfield for field1,endfield in zip(fields1,endfields)]
             rms_wrt_endpoint.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
-
+            
     if append:
         mode="a"
     else:
@@ -120,8 +127,8 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
         with open(file_out_stem+"_seq_"+maskname+".dat",mode) as f:
             if mode == "w":
                 f.write(",".join([varname for varname in varnames])+"\n")
-            for rms_out in rms_seq:
-                f.write(",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
+            for date1, rms_out in zip(dates, rms_seq):
+                f.write(str(date1)+":"+",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
                 
     if files_in2[0] is not None:
         for ii, maskname in enumerate(masknames):
@@ -129,8 +136,8 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
             with open(file_out_stem+"_pairwise_"+maskname+".dat",mode) as f:
                 if mode == "w":
                     f.write(",".join([varname for varname in varnames])+"\n")
-                for rms_out in rms_pairwise:
-                    f.write(",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
+                for date1, rms_out in zip(dates, rms_pairwise):
+                    f.write(str(date1)+":"+",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
                 
     if end_file_in is not None:
         for ii, maskname in enumerate(masknames):
@@ -140,8 +147,8 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
                     # for the RMS w.r.t. endpoint write the endpoint filename to the .dat file for reference.
                     f.write(end_file_in+"\n")
                     f.write(",".join([varname for varname in varnames])+"\n")
-                for rms_out in rms_wrt_endpoint:
-                    f.write(",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
+                for date1, rms_out in zip(dates, rms_wrt_endpoint):
+                    f.write(str(date1)+":"+",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
                                     
 if __name__=="__main__":
     import argparse
