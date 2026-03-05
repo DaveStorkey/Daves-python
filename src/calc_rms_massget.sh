@@ -11,7 +11,7 @@ do
       M) maskfile=$OPTARG ;;
       m) masknames=$OPTARG ;;
       X) invert_mask="true" ;;
-      e) end_file=$OPTARG  ;;
+      e) end_files=$OPTARG  ;;
       o) file_out=$OPTARG  ;;
       C) chunksize=$OPTARG  ;;
       K) keep_files="true" ;;
@@ -49,19 +49,27 @@ fi
 
 if [[ -z "$chunksize" ]]; then chunksize=10; fi
 
-if [[ -n "$end_file" ]]
+if [[ -n "$end_files" ]]
 then
-    if [[ "$(echo $end_file | cut -c1-3)" == "moo" || "$(echo $end_file | cut -c1)" == ":" ]]
-    then
-       # (might) need to restore the file from MASS
-       end_file_basename=$(basename $end_file)
-       if [[ ! -e "$end_file_basename" ]]
+    end_files=$(echo $end_files | sed 's/,/ /g')
+    end_files_out=""
+    for end_file in $end_files
+    do
+       if [[ "$(echo $end_file | cut -c1-3)" == "moo" || "$(echo $end_file | cut -c1)" == ":" ]]
        then
-          echo "Restoring $end_file"
-          moo get $end_file .
+          # (might) need to restore the file from MASS
+          end_file_basename=$(basename $end_file)
+          if [[ ! -e "$end_file_basename" ]]
+          then
+             echo "Restoring $end_file"
+             moo get $end_file .
+          fi
+          end_files_out="$end_files_out $end_file_basename"
+       else
+	  end_files_out="$end_files_out $end_file"
        fi
-       end_file=$end_file_basename
-    fi
+    done
+    echo "end_Files_out : $end_files_out"
 fi
    
 moofilelist=""
@@ -119,7 +127,7 @@ do
         filelist2_option=""
         if [[ -n "$filelist2" ]];then filelist2_option="-j $filelist2" ; fi
         end_file_option=""
-        if [[ -n "$end_file" ]];then  end_file_option="-e $end_file" ; fi
+        if [[ -n "$end_files_out" ]];then  end_file_option="-e $end_files_out" ; fi
         echo "filelist : $filelist"
         echo "filelist2 : $filelist2"
         calc_rms_series.py -i $filelist $filelist2_option -v $varnames $mask_options -o $file_out $end_file_option $append_option
@@ -132,7 +140,18 @@ do
             if [[ -n "$filelist2" ]];then
 	        filelist_to_delete="$filelist_to_delete $(echo $filelist2 | rev | cut -d" " -f2- | rev)"
 	    fi
-	    rm $filelist_to_delete
+            for file in $filelist_to_delete
+	    do
+                delete="true"
+                for end_file in $end_files_out
+		do
+		    if [[ "$file" == "$end_file" ]]
+		    then
+			delete="false"
+		    fi
+		done
+		if [[ "$delete" == "true" ]]; then rm $file;fi
+	    done
 	fi
         filelist=$(echo $filelist | rev | cut -d" " -f1 | rev)
         if [[ -n "$filelist2" ]];then

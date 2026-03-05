@@ -52,7 +52,7 @@ def get_fields(infile=None, varnames=None, masks=None ):
 
 
 def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=None, masknames=None,
-                    invert_mask=None, end_file_in=None, file_out_stem=None, append=None):
+                    invert_mask=None, end_files_in=None, file_out_stem=None, append=None):
 
     if files_in is None:
         raise Exception("Error : must specify at least two input files.")
@@ -85,8 +85,12 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
         masknames=["global"]
         masks=[None]
                 
-    if end_file_in is not None:
-        endfields = get_fields(infile=end_file_in, varnames=varnames, masks=masks)
+    if end_files_in is not None:
+        if not isinstance(end_files_in,list):
+            end_files_in=[end_files_in]
+        endfields_list=[]
+        for end_file in end_files_in:
+            endfields_list.append(get_fields(infile=end_file, varnames=varnames, masks=masks))
                 
     if file_out_stem is None:
         file_out_stem="RMS_diffs"
@@ -94,9 +98,17 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
     dates=[]
     rms_seq=[]
     rms_pairwise=[]
-    rms_wrt_endpoint=[]
+    if end_files_in is not None:
+        rms_wrt_endpoints=[[] for _ in range(len(end_files_in))]
     fields1_prev=None
-    for file1, file2 in zip(files_in, files_in2):
+    # NB. We always assume that the first file in the input list is a "prev" field which only gets
+    #     used to calculate sequential residuals, *not* the pairwise RMS or the RMS w.r.t. endpoint.
+    #     This facilitates the usual mode of operation where a lot of files are restored from MASS
+    #     in chunks and this script called iteratively for each chunk from calc_rms_massget.sh.
+    #     To keep things simple we assume the same number of files in the two file lists, the first
+    #     file in the second file list being ignored.
+    fields1_prev = get_fields(infile=files_in[0], varnames=varnames, masks=masks)
+    for file1, file2 in zip(files_in[1:], files_in2[1:]):
         print("Working on file "+file1)
         # assuming restart file of form RUNID_DATE_...
         date1 = file1.split("_")[1]
@@ -113,9 +125,10 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
             fields2 = get_fields(infile=file2, varnames=varnames, masks=masks)
             fields_diff = [field2-field1 for field1,field2 in zip(fields1,fields2)]
             rms_pairwise.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
-        if end_file_in is not None:
-            fields_diff = [field1-endfield for field1,endfield in zip(fields1,endfields)]
-            rms_wrt_endpoint.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
+        if end_files_in is not None:
+            for ii, endfields in enumerate(endfields_list):
+                fields_diff = [field1-endfield for field1,endfield in zip(fields1,endfields)]
+                rms_wrt_endpoints[ii].append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
             
     if append:
         mode="a"
@@ -139,16 +152,17 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
                 for date1, rms_out in zip(dates, rms_pairwise):
                     f.write(str(date1)+":"+",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
                 
-    if end_file_in is not None:
-        for ii, maskname in enumerate(masknames):
-            range_to_write=slice(ii*nvar,(ii+1)*nvar)
-            with open(file_out_stem+"_wrt_endpoint_"+maskname+".dat",mode) as f:
-                if mode == "w":
-                    # for the RMS w.r.t. endpoint write the endpoint filename to the .dat file for reference.
-                    f.write(end_file_in+"\n")
-                    f.write(",".join([varname for varname in varnames])+"\n")
-                for date1, rms_out in zip(dates, rms_wrt_endpoint):
-                    f.write(str(date1)+":"+",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
+    if end_files_in is not None:
+        for end_file_in, rms_wrt_endpoint in zip(end_files_in, rms_wrt_endpoints):
+            for ii, maskname in enumerate(masknames):
+                range_to_write=slice(ii*nvar,(ii+1)*nvar)
+                with open(file_out_stem+"_wrt_"+end_file_in.replace(".nc","")+"_"+maskname+".dat",mode) as f:
+                    if mode == "w":
+                        # for the RMS w.r.t. endpoint write the endpoint filename to the .dat file for reference.
+                        # f.write(end_file_in+"\n")
+                        f.write(",".join([varname for varname in varnames])+"\n")
+                    for date1, rms_out in zip(dates, rms_wrt_endpoint):
+                        f.write(str(date1)+":"+",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
                                     
 if __name__=="__main__":
     import argparse
@@ -169,11 +183,11 @@ if __name__=="__main__":
                          help="filename stem of output file")
     parser.add_argument("-A", "--append", action="store_true",dest="append",
                     help="append data to existing files")
-    parser.add_argument("-e", "--end_file_in", action="store",dest="end_file_in",
-                         help="input end file")
+    parser.add_argument("-e", "--end_files_in", action="store",dest="end_files_in",nargs="*",
+                         help="input endpoint files")
 
     args = parser.parse_args()
 
     calc_rms_series(files_in=args.files_in,files_in2=args.files_in2,varnames=args.varnames,
-                    file_out_stem=args.file_out_stem, end_file_in=args.end_file_in, append=args.append,
+                    file_out_stem=args.file_out_stem, end_files_in=args.end_files_in, append=args.append,
                     maskfilename=args.maskfilename, masknames=args.masknames, invert_mask=args.invert_mask)
