@@ -18,6 +18,12 @@ masking and numpy.ma functionality.
 import netCDF4 as nc
 import numpy as np
 import numpy.ma as ma
+import csv
+
+def decomment(csvfile):
+    for row in csvfile:
+        raw = row.split('#')[0].strip()
+        if raw: yield raw
 
 def get_fields(infile=None, varnames=None, masks=None ):
 
@@ -52,7 +58,7 @@ def get_fields(infile=None, varnames=None, masks=None ):
 
 
 def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=None, masknames=None,
-                    invert_mask=None, end_files_in=None, file_out_stem=None, append=None):
+                    invert_mask=None, end_files_in=None, points_file=None, file_out_stem=None, append=None):
 
     if files_in is None:
         raise Exception("Error : must specify at least two input files.")
@@ -91,12 +97,31 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
         endfields_list=[]
         for end_file in end_files_in:
             endfields_list.append(get_fields(infile=end_file, varnames=varnames, masks=masks))
-                
+
+    if points_file is not None:
+        with open(points_file, 'r') as f:
+            # turn the iterator into a list to make it easy to iterate over it more than once.
+            lines=list(csv.reader(decomment(f), delimiter=','))
+            # NB. for advanced indexing of numpy arrays the list of indices
+            #     has to be a tuple, *not* a list or a numpy array.
+            points_tuple=tuple([[] for _ in range(len(lines[0]))])
+            for line in lines:
+                print('line : ',line)
+                for ii, idx in enumerate(line):
+                    print('ii, idx : ',ii,idx)
+                    points_tuple[ii].append(int(idx))
+        print('points_tuple: ',points_tuple)
+        if len(points_tuple[0]) == 0:
+            raise Exception('Could not read points file '+points_file)
+        
     if file_out_stem is None:
         file_out_stem="RMS_diffs"
         
     dates=[]
     rms_seq=[]
+    point_values={}
+    for varname in varnames:
+        point_values[varname]=[]
     rms_pairwise=[]
     if end_files_in is not None:
         rms_wrt_endpoints=[[] for _ in range(len(end_files_in))]
@@ -114,6 +139,10 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
         date1 = file1.split("_")[1]
         dates.append(date1)
         fields1 = get_fields(infile=file1, varnames=varnames, masks=masks)
+        if points_file is not None:
+            # just pick out the global mask - assume first in the list
+            for varname,field1 in zip(varnames,fields1[:len(varnames)]):
+                point_values[varname].append(field1[points_tuple])
         if fields1_prev is not None:
             fields_diff = [field1-field1_prev for field1,field1_prev in zip(fields1,fields1_prev)]
             rms_seq.append( [ma.sqrt(ma.mean(field_diff*field_diff)) for field_diff in fields_diff] )
@@ -142,7 +171,15 @@ def calc_rms_series(files_in=None, files_in2=None, varnames=None, maskfilename=N
                 f.write(",".join([varname for varname in varnames])+"\n")
             for date1, rms_out in zip(dates, rms_seq):
                 f.write(str(date1)+":"+",".join([str(rms_write) for rms_write in rms_out[range_to_write]])+"\n")
-                
+
+    if points_file is not None:            
+        for varname in varnames:
+            with open(file_out_stem+"_"+varname+"_points.dat",mode) as f:
+                # point_value is a list of values for the points specified
+                # for a particular variable at a particular time.
+                for date1, point_value in zip(dates,point_values[varname]):
+                    f.write(str(date1)+":"+",".join([str(value_out) for value_out in point_value])+"\n")
+        
     if files_in2[0] is not None:
         for ii, maskname in enumerate(masknames):
             range_to_write=slice(ii*nvar,(ii+1)*nvar)
@@ -185,9 +222,12 @@ if __name__=="__main__":
                     help="append data to existing files")
     parser.add_argument("-e", "--end_files_in", action="store",dest="end_files_in",nargs="*",
                          help="input endpoint files")
+    parser.add_argument("-p", "--points_files", action="store",dest="points_file",
+                         help="file with list of points to be sampled")
 
     args = parser.parse_args()
 
     calc_rms_series(files_in=args.files_in,files_in2=args.files_in2,varnames=args.varnames,
                     file_out_stem=args.file_out_stem, end_files_in=args.end_files_in, append=args.append,
-                    maskfilename=args.maskfilename, masknames=args.masknames, invert_mask=args.invert_mask)
+                    maskfilename=args.maskfilename, masknames=args.masknames, invert_mask=args.invert_mask,
+                    points_file=args.points_file)
