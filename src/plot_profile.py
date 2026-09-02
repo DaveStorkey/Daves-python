@@ -14,6 +14,7 @@ import numpy.ma as ma
 import matplotlib
 import matplotlib.pyplot as plt
 import netCDF4
+import textwrap
 
 # ============================ class run =====================================
 class run(object):
@@ -46,7 +47,7 @@ def parse_dbfile(runid):
     return cpltrunid, cpltname, cpltline, cpltcolor
 
 # ============================ main routine =====================================
-def plot_profile(datafiles,fields,maxdepth=None,xmin=None,xmax=None,xtitle=None,legend=None,legendloc="upper right",
+def plot_profile(datafiles,fields,maxdepth=None,xmin=None,xmax=None,xtitle=None,title=None,legend=None,legendloc="upper right",
                  linestyles=None,colors=None,outfile=None,normfield=None,normfiles=None,runids=None,kup=None):
 
     if normfield is not None:
@@ -166,6 +167,22 @@ def plot_profile(datafiles,fields,maxdepth=None,xmin=None,xmax=None,xtitle=None,
     if legend is not None:
         plt.legend(legend,loc=legendloc)
 
+    # Plot title
+    if title is not None:
+        if not isinstance(title,list):
+            title=[title]
+        if len(title) > 1:
+            plot_title = "\n".join(title)
+            # Would be clever to adjust this formula to
+            # take account of the title fontsize. 
+            plt.subplots_adjust(top=0.95-0.05*len(title))
+        else:        
+            plot_title=textwrap.fill(title[0],70)
+            # Would be clever to adjust this formula to
+            # take account of the title fontsize. 
+            plt.subplots_adjust(top=0.9-0.05*plot_title.count("\n"))
+        plt.gcf().suptitle(plot_title, y=0.95)    
+
     if outfile is not None:
         matplotlib.rcParams['font.size'] =8
         plt.savefig(outfile,dpi=200)
@@ -197,6 +214,8 @@ if __name__=="__main__":
                     help="runid(s): if specified read descriptions, line colours and line styles from style.db")
     parser.add_argument("-s", "--linestyles", action="store",dest="linestyles",default=None,nargs="+",
                     help="linestyle(s)")
+    parser.add_argument("-T", "--title", action="store",dest="title",default=None,nargs="+",
+                    help="title of plot: multiple arguments plotted on separate lines")
     parser.add_argument("-t", "--xtitle", action="store",dest="xtitle",default=None,
                     help="title of x-axis")
     parser.add_argument("-L", "--legend", action="store",dest="legend",default=None,nargs="+",
@@ -205,6 +224,6 @@ if __name__=="__main__":
                     help="location of legend on plot")
     args = parser.parse_args()
 
-    plot_profile(args.datafiles,args.fields,maxdepth=args.maxdepth,xmin=args.xmin,xmax=args.xmax,xtitle=args.xtitle,
+    plot_profile(args.datafiles,args.fields,maxdepth=args.maxdepth,xmin=args.xmin,xmax=args.xmax,xtitle=args.xtitle,title=args.title,
                  linestyles=args.linestyles,colors=args.colors,legend=args.legend,legendloc=args.legendloc,
                  outfile=args.outfile,normfiles=args.normfiles,normfield=args.normfield,runids=args.runids,kup=args.kup)        
