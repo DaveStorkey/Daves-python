@@ -182,6 +182,7 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
     
     constraints=[]
     if any([arg is not None for arg in [east,west,south,north,top,bottom]]):
+        print("Extracting area WESN : ",west,east,south,north)
         cubes, constraints = get_subdomain(cubes,east=east,west=west,south=south,north=north,
                                 top=top,bottom=bottom)
         if subout:
@@ -217,9 +218,11 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
         if len(wgts_list) > 1:
             for wgts_to_multiply in wgts_list[1:]:
                 wgts = iris.analysis.maths.multiply(wgts, wgts_to_multiply, in_place=True)
-        elif wgtsfiles[0] == "measures":
+        if wgts.shape != cubes[0].shape:
+            print("Broadcasting wgts to be the same shape as cubes[0]")
             # in this case, broadcast the weights to be the same shape as the cube... 
-            wgts = ma.ones(cubes[0].shape)[:] * wgts[:]
+            wgts = ma.ones(cubes[0].shape)[:] * wgts.data[:]
+        assert wgts.shape == cubes[0].shape, f"Weights array must have shape {cubes[0].shape} but has shape {wgts.shape}"
         # Apply same subdomain extraction to the weights as we did to the field.
         # Note don't need to apply masking because a masked point multiplied by an unmasked point
         # is a masked point.
@@ -232,7 +235,8 @@ def reduce_fields(infile=None,invars=None,coords=None,wgtsfiles=None,wgtsnames=N
         wgts = None
                 
     print("cubes[0].shape : ",cubes[0].shape)
-    print("wgts.shape : ", wgts.shape)
+    if wgts is not None:
+        print("wgts.shape : ", wgts.shape)
     if aggr in ["min","max"]:
         # no weights keyword
         cubes_reduced=[factor * cube.collapsed(coords, aggregators[aggr]) for cube in cubes]
